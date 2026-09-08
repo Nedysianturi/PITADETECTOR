@@ -43,20 +43,33 @@ def classify_image(
         reasons.append(f"**Jejak AI Ditemukan**: Berkas memuat signature/prompt AI terverifikasi ({', '.join(ai_sigs)}).")
         
     device_cat = metadata_res.get("device_category", "unknown")
+    has_exif = metadata_res.get("has_exif", False)
+    has_camera_hardware_exif = bool(has_exif and device_cat in ["dedicated_camera", "smartphone", "webcam"])
+
     if device_cat == "screenshot":
         score_screenshot += 85.0
         reasons.append(f"**Perangkat Tangkapan Layar Terdeteksi**: Metadata/Nama file mengindikasikan software screenshot ({metadata_res.get('software') or 'Screen Capture Tool'}).")
     elif device_cat == "webcam":
-        score_webcam += 75.0
+        score_webcam += 120.0
         reasons.append(f"**Perangkat Webcam / Laptop Terdeteksi**: EXIF/Software mencatat {metadata_res.get('make')} {metadata_res.get('model')} {metadata_res.get('software')}".strip())
     elif device_cat == "smartphone":
-        score_phone += 70.0
+        score_phone += 140.0
         reasons.append(f"**Hardware Smartphone Terdeteksi**: EXIF mencatat perangkat {metadata_res.get('make')} {metadata_res.get('model')}.")
+        if metadata_res.get("f_number") or metadata_res.get("exposure_time") or metadata_res.get("iso"):
+            score_phone += 15.0
+            reasons.append(f"**Parameter Sensor Ponsel**: f/{metadata_res.get('f_number') or '-'}, ISO {metadata_res.get('iso') or '-'}, Shutter {metadata_res.get('exposure_time') or '-'}s.")
     elif device_cat == "dedicated_camera":
-        score_camera += 70.0
+        score_camera += 140.0
         reasons.append(f"**Kamera Profesional Terdeteksi**: EXIF mencatat bodi {metadata_res.get('make')} {metadata_res.get('model')}.")
         if metadata_res.get("lens_model"):
+            score_camera += 30.0
             reasons.append(f"**Optik Lensa Fisik**: Lensa eksternal {metadata_res.get('lens_model')}.")
+        if metadata_res.get("f_number") or metadata_res.get("exposure_time") or metadata_res.get("iso"):
+            score_camera += 15.0
+            reasons.append(f"**Parameter Eksposur Kamera**: f/{metadata_res.get('f_number') or '-'}, ISO {metadata_res.get('iso') or '-'}, Shutter {metadata_res.get('exposure_time') or '-'}s.")
+        if megapixels >= 10.0:
+            score_camera += 25.0
+            reasons.append(f"**Resolusi Sensor Besar**: Format {w}x{h} px ({megapixels} MP) khas sensor optik kamera resolusi tinggi.")
 
     crop_factor = metadata_res.get("crop_factor")
     if crop_factor:
@@ -71,7 +84,7 @@ def classify_image(
     # 2. ANALISIS RESOLUSI, ORIENTASI, & ASPEK RASIO
     # -------------------------------------------------------------
     is_screen_res = metadata_res.get("is_screen_resolution", False)
-    if is_screen_res:
+    if is_screen_res and not has_camera_hardware_exif:
         score_screenshot += 30.0
         reasons.append(f"**Resolusi Standar Layar Komputer/HP**: Dimensi {w}x{h} px persis cocok dengan format monitor desktop atau layar ponsel standar.")
 
@@ -89,18 +102,18 @@ def classify_image(
     is_webcam_resolution = (w > h) and (w, h) in [
         (1280, 720), (640, 480), (1280, 960), (1920, 1080)
     ]
-    if (is_webcam_resolution or (w > h and megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot" and not is_graphic:
+    if (is_webcam_resolution or (w > h and megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot" and not is_graphic and not has_camera_hardware_exif:
         score_webcam += 20.0
         reasons.append(f"**Resolusi Standar Laptop/Webcam**: Dimensi landscape {w}x{h} px ({megapixels} MP, 16:9/4:3) adalah format modul video conference.")
     elif w == h and not is_graphic and (w in [512, 768, 1024, 1536, 2048]):
         # Format 1:1 simetris tanpa teks adalah ciri khas generator model difusi
         score_ai += 25.0
         reasons.append(f"**Resolusi Standar Generator AI**: Dimensi simetris persis {w}x{h} px sangat umum pada checkpoint model difusi.")
-    elif abs(aspect_ratio - 1.5) < 0.05 and megapixels >= 8.0 and not is_graphic:
+    elif abs(aspect_ratio - 1.5) < 0.05 and megapixels >= 8.0 and (not is_graphic or has_camera_hardware_exif):
         # 3:2 adalah rasio standar sensor DSLR/Mirrorless 35mm (cth: 6000x4000)
         score_camera += 20.0
         reasons.append(f"**Rasio 3:2 Asli Fotografi**: Aspek rasio {aspect_ratio} dengan resolusi tinggi ({megapixels} MP) adalah standar emas sensor kamera 35mm DSLR/Mirrorless.")
-    elif abs(aspect_ratio - 1.33) < 0.05 and megapixels >= 8.0 and not is_graphic:
+    elif abs(aspect_ratio - 1.33) < 0.05 and megapixels >= 8.0 and (not is_graphic or has_camera_hardware_exif):
         # 4:3 resolusi tinggi adalah rasio default sensor smartphone modern (cth: 4032x3024 = 12MP)
         score_phone += 18.0
         reasons.append(f"**Rasio 4:3 Sensor Mobile**: Resolusi {megapixels} MP dengan rasio {aspect_ratio} adalah standar default sensor kamera smartphone.")
@@ -140,18 +153,21 @@ def classify_image(
         if len(ai_sigs) > 0 or spectral_anomaly >= 0.40:
             score_ai += 75.0
             reasons.append("**Generasi AI Terverifikasi**: Ditemukan jejak/anomali generator AI pada berkas desain.")
-        else:
-            # Poster promosi, flyer Canva/Photoshop, atau tangkapan layar dokumen
+        elif not has_camera_hardware_exif:
+            # Poster promosi, flyer Canva/Photoshop, atau tangkapan layar dokumen tanpa EXIF kamera fisik
             score_screenshot += 85.0
             reasons.append(f"**Desain Grafis / Poster Digital Terdeteksi**: Memuat tipografi teks digital berkontras tinggi (Laplacian p99 {lap_p99:.1f}), blok warna sintetis ({sat_ratio*100:.1f}%), dan elemen tata letak promosi non-kamera.")
             reasons.append("**Bukan Jepretan Kamera Fisik**: Citra merupakan hasil tata letak digital (Canva / Desain Poster / Tangkapan Media Sosial), bukan foto langsung dari sensor kamera optik.")
-    elif is_screenshot:
+        else:
+            # Objek nyata dalam bidikan kamera (spanduk panggung, banner backdrop, teks pameran)
+            reasons.append(f"**Objek Spanduk / Teks Terdeteksi**: Terdeteksi elemen tulisan/spanduk panggung pada latar bidikan (Laplacian p99 {lap_p99:.1f}), ditangkap langsung oleh sensor kamera optik.")
+    elif is_screenshot and not has_camera_hardware_exif:
         score_screenshot += 40.0
         reasons.append(f"**Karakteristik Tangkapan Layar**: Zero-noise optik ({avg_noise:.2f}), tepi piksel digital ter-render presisi, dan rasio elemen grafis murni ({pure_color_ratio*100:.1f}%).")
-    elif screenshot_score >= 5.0 and not metadata_res.get("has_exif"):
+    elif screenshot_score >= 5.0 and not has_exif:
         score_screenshot += 25.0
         reasons.append(f"**Ciri Grafis Digital UI**: Skor keseragaman piksel tinggi ({screenshot_score:.1f}) mengindikasikan tampilan antarmuka digital.")
-    elif avg_noise < 2.2 and not metadata_res.get("has_exif") and not is_screen_res:
+    elif avg_noise < 2.2 and not has_exif and not is_screen_res:
         # Pembeda krusial AI vs Foto Terkompresi Medsos:
         if spectral_anomaly >= 0.35 or len(ai_sigs) > 0 or (w == h and w in [512, 768, 1024]):
             score_ai += 25.0
@@ -161,7 +177,7 @@ def classify_image(
             reasons.append(f"**Denoising & Kompresi Medsos**: Noise halus ({avg_noise:.2f}) dengan spektrum frekuensi alami, konsisten dengan pemrosesan ISP ponsel / kompresi WhatsApp.")
         else:
             score_ai += 10.0
-    elif is_webcam_optics and (w > h):
+    elif is_webcam_optics and (w > h) and not has_camera_hardware_exif:
         score_webcam += 25.0
         reasons.append(f"**Optik Lensa Webcam/Laptop**: Ditemukan noise indoor ({avg_noise:.2f}) dengan kontras tepi lembut tanpa ISP neural penajaman ekstrem.")
     elif avg_noise >= 3.0 and not is_graphic:
@@ -176,7 +192,7 @@ def classify_image(
     # 5. ANALISIS ERROR LEVEL ANALYSIS (ELA)
     # -------------------------------------------------------------
     mean_ela = ela_res.get("mean_error", 0.0)
-    if mean_ela < 1.6 and not metadata_res.get("has_exif") and not is_screenshot and not is_graphic:
+    if mean_ela < 1.6 and not has_exif and not is_screenshot and not is_graphic:
         if spectral_anomaly >= 0.35 or len(ai_sigs) > 0 or (w == h and w in [512, 768, 1024]):
             score_ai += 12.0
         elif is_vertical_mobile:
@@ -187,7 +203,7 @@ def classify_image(
     # -------------------------------------------------------------
     # 6. PENGECEKAN KETIADAAN EXIF & MEDIA SOSIAL
     # -------------------------------------------------------------
-    if not metadata_res.get("has_exif"):
+    if not has_exif:
         if is_screenshot or is_screen_res or is_graphic:
             score_screenshot += 10.0
         elif is_vertical_mobile:
@@ -211,8 +227,17 @@ def classify_image(
     
     # Penyesuaian akhir agar total tepat 100%
     diff = round(100.0 - (prob_ai + prob_phone + prob_camera + prob_webcam + prob_screenshot), 1)
-    if is_graphic or is_screenshot:
+    if (is_graphic or is_screenshot) and not has_camera_hardware_exif:
         prob_screenshot += diff
+    elif has_camera_hardware_exif:
+        if device_cat == "dedicated_camera":
+            prob_camera += diff
+        elif device_cat == "smartphone":
+            prob_phone += diff
+        elif device_cat == "webcam":
+            prob_webcam += diff
+        else:
+            prob_phone += diff
     elif is_vertical_mobile:
         prob_phone += diff
     else:
