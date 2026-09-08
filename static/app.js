@@ -24,6 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const barCamera = document.getElementById("barCamera");
     const valWebcam = document.getElementById("valWebcam");
     const barWebcam = document.getElementById("barWebcam");
+    const valScreenshot = document.getElementById("valScreenshot");
+    const barScreenshot = document.getElementById("barScreenshot");
 
     // Viewport Elements
     const mainDisplayImg = document.getElementById("mainDisplayImg");
@@ -313,6 +315,8 @@ document.addEventListener("DOMContentLoaded", () => {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera smartphone dengan jejak komputasi penajaman (ISP) dan karakteristik sensor kecil.";
         } else if (cls.verdict === "webcam") {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera laptop / webcam dengan format video call, optik fixed-focus lembut, dan noise sensor indoor.";
+        } else if (cls.verdict === "screenshot") {
+            verdictSummary.textContent = "Gambar teridentifikasi sebagai tangkapan layar (screenshot) dengan zero-noise optik, piksel UI ter-render presisi, dan ketiadaan sensor fisik.";
         } else {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera dedicated (DSLR / Mirrorless) dengan optik fisik murni dan noise sensor alami.";
         }
@@ -322,17 +326,20 @@ document.addEventListener("DOMContentLoaded", () => {
         const pPhone = cls.probabilities.smartphone || 0;
         const pCamera = cls.probabilities.dedicated_camera || 0;
         const pWebcam = cls.probabilities.webcam || 0;
+        const pScreenshot = cls.probabilities.screenshot || 0;
 
         valAi.textContent = `${pAi}%`;
         valPhone.textContent = `${pPhone}%`;
         valCamera.textContent = `${pCamera}%`;
         if (valWebcam) valWebcam.textContent = `${pWebcam}%`;
+        if (valScreenshot) valScreenshot.textContent = `${pScreenshot}%`;
 
         setTimeout(() => {
             barAi.style.width = `${pAi}%`;
             barPhone.style.width = `${pPhone}%`;
             barCamera.style.width = `${pCamera}%`;
             if (barWebcam) barWebcam.style.width = `${pWebcam}%`;
+            if (barScreenshot) barScreenshot.style.width = `${pScreenshot}%`;
         }, 50);
 
         // 3. Reset & Render Visual Mode
@@ -465,6 +472,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 param: "Rasio Energi Frekuensi Tinggi",
                 val: `${(data.frequency.high_energy_ratio * 100).toFixed(1)}%`,
                 indic: data.frequency.high_energy_ratio < 0.05 ? "Kehalusan mikro buatan (Smoothing AI)" : "Kaya detail sensorik optik"
+            },
+            {
+                param: "Rasio Piksel Digital Identik",
+                val: data.noise.zero_diff_ratio != null ? `${(data.noise.zero_diff_ratio * 100).toFixed(1)}%` : "-",
+                indic: (data.noise.zero_diff_ratio || 0) > 0.60 ? "Piksel digital seragam murni (Khas Screenshot)" : "Fluktuasi noise optik foton alami"
+            },
+            {
+                param: "Proporsi Warna UI Murni",
+                val: data.noise.pure_color_ratio != null ? `${(data.noise.pure_color_ratio * 100).toFixed(1)}%` : "-",
+                indic: (data.noise.pure_color_ratio || 0) > 0.20 ? "Dominasi area warna/teks antarmuka UI" : "Distribusi tonal fotografi alami"
             }
         ];
 
@@ -539,7 +556,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 ai:               [239, 68,  68],
                 smartphone:       [59,  130, 246],
                 dedicated_camera: [16,  185, 129],
-                webcam:           [168, 85,  247]
+                webcam:           [168, 85,  247],
+                screenshot:       [245, 158, 11]
             };
             const [r, g, b] = verdictColors[cl.verdict] || [100, 116, 139];
             doc.setFillColor(r, g, b);
@@ -564,7 +582,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 { label: "Buatan AI",           key: "ai",               color: [239, 68, 68] },
                 { label: "Kamera HP",            key: "smartphone",       color: [59, 130, 246] },
                 { label: "Kamera DSLR/Mirrorless", key: "dedicated_camera", color: [16, 185, 129] },
-                { label: "Webcam / Laptop",      key: "webcam",           color: [168, 85, 247] }
+                { label: "Webcam / Laptop",      key: "webcam",           color: [168, 85, 247] },
+                { label: "Screenshot / Layar",   key: "screenshot",       color: [245, 158, 11] }
             ];
             const barW = (W - margin * 2 - 8) / 2;
             probEntries.forEach((p, i) => {
@@ -645,11 +664,17 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.text("METRIK SINYAL & SPEKTRAL", margin, y);
             y += 5;
             const signalRows = [
-                ["Noise Sensor (σ)",         data.noise?.noise_std        ?? "-"],
+                ["Noise Sensor (σ)",         data.noise?.avg_noise_std    ?? "-"],
                 ["Mean Error ELA",           data.ela?.mean_error         ?? "-"],
                 ["Kurtosis FFT Tinggi",      data.frequency?.hf_kurtosis  ?? "-"],
                 ["Rasio Energi Tinggi",      data.frequency?.high_energy_ratio != null
                                             ? `${(data.frequency.high_energy_ratio * 100).toFixed(1)}%`
+                                            : "-"],
+                ["Piksel Digital Identik",   data.noise?.zero_diff_ratio != null
+                                            ? `${(data.noise.zero_diff_ratio * 100).toFixed(1)}%`
+                                            : "-"],
+                ["Proporsi Warna UI",        data.noise?.pure_color_ratio != null
+                                            ? `${(data.noise.pure_color_ratio * 100).toFixed(1)}%`
                                             : "-"],
             ];
             doc.setFontSize(8.5);

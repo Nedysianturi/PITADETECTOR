@@ -554,7 +554,11 @@ body {
 }
 
 .fill-webcam {
-    background: linear-gradient(90deg, #f59e0b, #f97316);
+    background: linear-gradient(90deg, #a855f7, #7c3aed);
+}
+
+.fill-screenshot {
+    background: linear-gradient(90deg, #f59e0b, #ea580c);
 }
 
 /* Dashboard Grid */

@@ -1,10 +1,11 @@
-# Pita Detector - Image Origin & AI Detector 🔍🤖📱📷
+# Pita Detector - Image Origin & AI Detector 🔍🤖📱📷💻🖥️
 
-**Pita Detector** adalah sistem analisis forensik citra digital berbasis web lokal yang dirancang untuk mengidentifikasi dan membedakan asal-usul gambar ke dalam empat kategori utama:
+**Pita Detector** adalah sistem analisis forensik citra digital berbasis web lokal yang dirancang untuk mengidentifikasi dan membedakan asal-usul gambar ke dalam lima kategori utama:
 1. 📱 **Kamera Smartphone (HP)**
 2. 📷 **Kamera Dedicated (DSLR / Mirrorless)**
 3. 💻 **Kamera Laptop & Webcam**
-4. 🤖 **Kecerdasan Buatan (Generative AI - Stable Diffusion, Midjourney, DALL-E, Flux, dll.)**
+4. 🖥️ **Tangkapan Layar (Screenshot / Screengrab)**
+5. 🤖 **Kecerdasan Buatan (Generative AI - Stable Diffusion, Midjourney, DALL-E, Flux, dll.)**
 
 Sistem berjalan **100% mandiri secara offline di komputer lokal Anda** tanpa membutuhkan API eksternal atau koneksi internet.
 
@@ -13,16 +14,19 @@ Sistem berjalan **100% mandiri secara offline di komputer lokal Anda** tanpa mem
 ## ⚡ Fitur Utama
 
 - **Analisis Multi-Lapisan (Hybrid Forensics)**:
-  - **Lapisan 1 (Metadata & Signatures)**: Memeriksa tag EXIF, TIFF, XMP, MakerNotes, dan chunk metadata AI (prompt, workflow, model checkpoint, C2PA Content Credentials).
+  - **Lapisan 1 (Metadata & Signatures)**: Memeriksa tag EXIF, TIFF, XMP, MakerNotes, signature software screenshot (Snipping Tool, ShareX, Lightshot, dll.), dan chunk metadata AI (prompt, workflow, model checkpoint, C2PA Content Credentials).
   - **Lapisan 2 (Error Level Analysis - ELA)**: Menganalisis perbedaan rasio kompresi JPEG diferensial untuk mendeteksi manipulasi atau uniformitas sintetik AI.
   - **Lapisan 3 (2D Fast Fourier Transform - FFT)**: Memetakan sidik jari frekuensi untuk mendeteksi anomali kisi dekonvolusi (*checkerboard artifacts*) dan cutoff VAE.
   - **Lapisan 4 (Sensor Noise & Optical Halos)**: Mengekstrak residual noise sensor dan rasio sharpening halo untuk membedakan ISP smartphone vs sensor besar Full-Frame/APS-C.
+  - **Lapisan 5 (Detektor Screenshot vs Foto Asli)**: Menganalisis *zero-differential gradient* (piksel digital identik), proporsi area warna murni web/UI (#FFFFFF/#000000), serta kesesuaian resolusi presisi layar monitor (1080p, 2K, 4K, MacBook Retina, dll.).
 - **Visual Forensics Inspector Interaktif**:
   - Tampilan visual langsung untuk **Foto Asli**, **ELA Heatmap**, **2D FFT Spectrum**, dan **Noise Residual**.
 - **Fitur Praktis**:
   - Mendukung **Drag-and-Drop**.
   - Mendukung **Paste Langsung dari Clipboard (<kbd>Ctrl</kbd> + <kbd>V</kbd>)**.
-  - Tombol **Quick Sample** untuk menguji sistem seketika dengan 1 klik.
+  - **Live Webcam Viewfinder**: Jepret foto langsung melalui kamera laptop/webcam secara real-time.
+  - **Ekspor Laporan PDF**: Unduh laporan analisis lengkap berformat PDF siap cetak.
+  - Tombol **Quick Sample** untuk menguji kelima kategori seketika dengan 1 klik.
 
 ---
 

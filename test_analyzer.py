@@ -12,7 +12,8 @@ def run_tests():
         ("samples/sample_ai.png", "ai", "Kecerdasan Buatan"),
         ("samples/sample_smartphone.jpg", "smartphone", "Kamera Smartphone"),
         ("samples/sample_dslr.jpg", "dedicated_camera", "Kamera Dedicated"),
-        ("samples/sample_webcam.jpg", "webcam", "Kamera Laptop / Webcam")
+        ("samples/sample_webcam.jpg", "webcam", "Kamera Laptop / Webcam"),
+        ("samples/sample_screenshot.png", "screenshot", "Screenshot / Layar")
     ]
     
     all_passed = True
@@ -37,7 +38,7 @@ def run_tests():
             
         print(f"\n{status} Pengujian: {label} ({filepath})")
         print(f"       Vonis Aktual   : {verdict} ({res['classification']['verdict_label']})")
-        print(f"       Probabilitas   : AI={probs['ai']}%, HP={probs['smartphone']}%, DSLR={probs['dedicated_camera']}%, Webcam={probs.get('webcam', 0)}%")
+        print(f"       Probabilitas   : AI={probs['ai']}%, HP={probs['smartphone']}%, DSLR={probs['dedicated_camera']}%, Webcam={probs.get('webcam', 0)}%, Screenshot={probs.get('screenshot', 0)}%")
         print(f"       Alasan Utama   : {res['classification']['reasons'][:2]}")
         print(f"       Dimensi/Format : {res['dimensions']} / {res['format']}")
         print(f"       Metrik Forensik: ELA Mean={res['ela']['mean_error']}, Noise STD={res['noise']['avg_noise_std']}, Halo={res['noise']['halo_ratio']}")

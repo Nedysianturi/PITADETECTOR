@@ -29,7 +29,7 @@
                     <span>FORENSIC ENGINE v1.0</span>
                 </div>
                 <h1 class="brand-title">PITA<span>DETECTOR</span></h1>
-                <p class="brand-subtitle">Detektor Asal Citra: Kamera HP • Kamera DSLR • Laptop/Webcam • Buatan AI</p>
+                <p class="brand-subtitle">Detektor Asal Citra: Kamera HP • Kamera DSLR • Laptop/Webcam • Tangkapan Layar • Buatan AI</p>
             </div>
             <div class="header-actions">
                 <div class="status-pill online">
@@ -120,6 +120,10 @@
                         <span class="btn-sample-icon">💻</span>
                         <span>Sampel Laptop / Webcam</span>
                     </button>
+                    <button class="btn-sample" data-sample="screenshot">
+                        <span class="btn-sample-icon">🖥️</span>
+                        <span>Sampel Screenshot Layar</span>
+                    </button>
                 </div>
             </div>
         </section>
@@ -190,6 +194,16 @@
                         </div>
                         <div class="progress-track">
                             <div class="progress-fill fill-webcam" id="barWebcam" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="prob-card prob-screenshot">
+                        <div class="prob-card-header">
+                            <span class="prob-name">🖥️ Tangkapan Layar (Screenshot)</span>
+                            <span class="prob-val" id="valScreenshot">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill fill-screenshot" id="barScreenshot" style="width: 0%;"></div>
                         </div>
                     </div>
                 </div>

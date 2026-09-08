@@ -122,6 +122,50 @@ def create_samples():
     }
     webcam_exif_bytes = piexif.dump(webcam_exif)
     webcam_img.save("samples/sample_webcam.jpg", "jpeg", quality=88, exif=webcam_exif_bytes)
+
+    # 5. Sampel Screenshot Layar Desktop (PNG 1920x1080 Full HD UI dengan zero noise)
+    print("Membuat sampel Screenshot...")
+    sc_w, sc_h = 1920, 1080
+    sc_arr = np.full((sc_h, sc_w, 3), 245, dtype=np.uint8)  # Background UI terang (#f5f5f5)
+    
+    # Titlebar / Browser header (#1e293b)
+    sc_arr[0:70, :] = [30, 41, 59]
+    # Address bar (#334155)
+    sc_arr[15:55, 200:1500] = [51, 65, 85]
+    # Window controls (red, yellow, green buttons)
+    sc_arr[28:42, 30:44] = [239, 68, 68]
+    sc_arr[28:42, 52:66] = [245, 158, 11]
+    sc_arr[28:42, 74:88] = [16, 185, 129]
+    
+    # Sidebar (#0f172a)
+    sc_arr[70:, 0:260] = [15, 23, 42]
+    
+    # Content cards (Pure white #ffffff)
+    sc_arr[120:450, 320:800] = [255, 255, 255]
+    sc_arr[120:450, 840:1320] = [255, 255, 255]
+    sc_arr[120:450, 1360:1840] = [255, 255, 255]
+    
+    # Text lines & UI elements inside cards
+    for c_start in [320, 840, 1360]:
+        sc_arr[150:165, c_start+30:c_start+250] = [30, 41, 59]
+        sc_arr[180:190, c_start+30:c_start+400] = [100, 116, 139]
+        sc_arr[200:210, c_start+30:c_start+380] = [148, 163, 184]
+        sc_arr[220:230, c_start+30:c_start+320] = [148, 163, 184]
+        # Button inside card (#06b6d4)
+        sc_arr[380:420, c_start+30:c_start+160] = [6, 182, 212]
+        
+    # Large content table (#ffffff)
+    sc_arr[500:1000, 320:1840] = [255, 255, 255]
+    sc_arr[500:540, 320:1840] = [241, 245, 249]
+    for row_y in range(570, 960, 45):
+        sc_arr[row_y:row_y+10, 350:1800] = [203, 213, 225]
+        
+    sc_img = Image.fromarray(sc_arr)
+    
+    # Simpan sebagai PNG dengan metadata Snipping Tool
+    sc_png_info = PngImagePlugin.PngInfo()
+    sc_png_info.add_text("Software", "Microsoft Windows Snipping Tool")
+    sc_img.save("samples/sample_screenshot.png", "png", pnginfo=sc_png_info)
     print("Sampel berhasil dibuat di folder samples/!")
 
 if __name__ == "__main__":

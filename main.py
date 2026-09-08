@@ -137,6 +137,13 @@ async def list_samples():
             "description": "Jepretan modul webcam 720p HD dengan lensa fixed & noise indoor",
             "filename": "sample_webcam.jpg",
             "icon": "💻"
+        },
+        {
+            "id": "screenshot",
+            "name": "Sampel Screenshot Layar (1080p Desktop UI)",
+            "description": "Tangkapan layar resolusi 1920x1080 dengan elemen UI grafis & zero noise",
+            "filename": "sample_screenshot.png",
+            "icon": "🖥️"
         }
     ]
     return samples
@@ -148,7 +155,8 @@ async def analyze_sample(sample_id: str):
         "ai": "sample_ai.png",
         "smartphone": "sample_smartphone.jpg",
         "dslr": "sample_dslr.jpg",
-        "webcam": "sample_webcam.jpg"
+        "webcam": "sample_webcam.jpg",
+        "screenshot": "sample_screenshot.png"
     }
     if sample_id not in file_map:
         raise HTTPException(status_code=404, detail="Sampel tidak ditemukan.")

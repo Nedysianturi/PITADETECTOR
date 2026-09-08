@@ -8,8 +8,9 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     """
     Menganalisis karakteristik noise sensor, dispersi butiran (grain),
     dan jejak komputasi penajaman (unsharp masking/sharpening halo).
-    Membedakan kamera HP (computational HDR + denoising agresif + halo tajam)
-    dengan kamera DSLR (noise optik Poisson-Gaussian alami) dan AI (ketiadaan noise fisik).
+    Membedakan kamera HP (computational HDR + denoising agresif + halo tajam),
+    kamera DSLR (noise optik Poisson-Gaussian alami), AI (ketiadaan noise fisik),
+    Webcam (noise indoor moderat), dan Screenshot (noise nol + piksel murni digital).
     """
     # Resize untuk analisis noise standar
     img = pil_img.convert("RGB")
@@ -21,7 +22,6 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     arr = np.array(img, dtype=np.float32)
     
     # 1. Ekstraksi Noise Residual (High-pass residual via median/box filter)
-    # Foto asli dikurangi versi smooth = sisa noise
     smoothed = img.filter(ImageFilter.BoxBlur(1))
     smooth_arr = np.array(smoothed, dtype=np.float32)
     noise_residual = arr - smooth_arr
@@ -32,18 +32,13 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     std_b = float(np.std(noise_residual[:, :, 2]))
     avg_noise_std = float((std_r + std_g + std_b) / 3.0)
     
-    # Variansi noise antar channel (Kamera fisik sensor Bayer memiliki korelasi noise tertentu)
+    # Variansi noise antar channel
     noise_channel_variance = float(np.var([std_r, std_g, std_b]))
     
-    # 2. Analisis Ketajaman Tepi & Halo Unsharp Mask (Computational Photography vs Optical Blur)
-    # Gunakan filter Laplacian untuk mendeteksi gradien tepi
+    # 2. Analisis Ketajaman Tepi & Halo Unsharp Mask
     gray = img.convert("L")
     gray_arr = np.array(gray, dtype=np.float32)
     
-    # Kernel Laplacian 3x3 sederhana
-    # [ 0,  1,  0]
-    # [ 1, -4,  1]
-    # [ 0,  1,  0]
     padded = np.pad(gray_arr, 1, mode='edge')
     laplacian = (
         padded[:-2, 1:-1] +
@@ -54,39 +49,100 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     )
     
     edge_energy = float(np.var(laplacian))
-    
-    # Hitung rasio overshoot / haloing (nilai ekstrim pada tepi dibanding rata-rata kontras)
     p99 = float(np.percentile(np.abs(laplacian), 99.5))
     p50 = float(np.median(np.abs(laplacian)) + 1e-6)
     halo_ratio = float(p99 / p50)
-    
+
+    # ── 3. DETEKSI SCREENSHOT — Analisis Ciri Khas Grafis Digital ───────────
+    # (a) Rasio piksel tetangga yang identik mutlak (zero differential gradient)
+    # Foto optik selalu memiliki fluktuasi noise Poisson-Gaussian fisik antar piksel.
+    # Sebaliknya, screenshot UI memiliki area besar dengan piksel bernilai identik (zero diff).
+    h_diff = np.abs(np.diff(arr, axis=1))
+    v_diff = np.abs(np.diff(arr, axis=0))
+    zero_diff_ratio = float(((h_diff == 0).mean() + (v_diff == 0).mean()) / 2.0)
+
+    # (b) Uniformitas warna blok besar (flat region score)
+    row_sample = arr[arr.shape[0] // 2, :, :]
+    h_mean_diff = np.abs(np.diff(row_sample, axis=0)).mean()
+    col_sample = arr[:, arr.shape[1] // 2, :]
+    v_mean_diff = np.abs(np.diff(col_sample, axis=0)).mean()
+    flat_region_score = float(1.0 / (1.0 + (h_mean_diff + v_mean_diff) / 2.0 + 1e-6))
+
+    # (c) Deteksi warna khas Web/UI: Pure White (#FFFFFF) & Pure Black (#000000)
+    arr_uint8 = np.array(img, dtype=np.uint8)
+    white_mask = np.all(arr_uint8 > 248, axis=2)
+    black_mask = np.all(arr_uint8 < 8,   axis=2)
+    white_ratio = float(white_mask.mean())
+    black_ratio = float(black_mask.mean())
+    pure_color_ratio = float(white_ratio + black_ratio)
+
+    # (d) Perhitungan skor screenshot terpadu
+    is_likely_screenshot = False
+    screenshot_score = 0.0
+
+    if zero_diff_ratio > 0.75:
+        screenshot_score += 5.0
+    elif zero_diff_ratio > 0.45:
+        screenshot_score += 2.5
+
+    if pure_color_ratio > 0.25:
+        screenshot_score += 3.0
+    elif pure_color_ratio > 0.08:
+        screenshot_score += 1.5
+
+    if flat_region_score > 0.15:
+        screenshot_score += 2.0
+
+    if noise_channel_variance < 0.2:
+        screenshot_score += 1.0
+
+    # Screenshot dikonfirmasi jika:
+    # 1. Rasio piksel identik tinggi dan terdapat elemen warna UI murni, ATAU
+    # 2. Skor screenshot gabungan sangat tinggi dengan zero differential dominan
+    if (zero_diff_ratio > 0.50 and pure_color_ratio > 0.10) or (zero_diff_ratio > 0.80):
+        is_likely_screenshot = True
+    elif screenshot_score >= 6.5 and zero_diff_ratio > 0.40:
+        is_likely_screenshot = True
+
+    # ── 4. Klasifikasi optik ──────────────────────────────────────────────────
     findings = []
-    
-    # Evaluasi pola
-    # Smartphone: noise residual rendah di area rata tapi halo ratio sangat tinggi (akibat software sharpening)
-    # Webcam: noise moderat/tinggi tapi ketajaman tepi rendah (lensa plastik fixed-focus tanpa neural ISP)
-    # DSLR: noise seimbang dengan rentang dinamis tinggi dan optik tajam alami
-    # AI: noise sangat rendah / artificial smoothness
     is_likely_smartphone_optics = False
-    is_likely_dslr_optics = False
-    is_likely_webcam_optics = False
-    is_likely_ai_noise = False
-    
-    if halo_ratio > 38.0 and avg_noise_std < 7.0:
+    is_likely_dslr_optics       = False
+    is_likely_webcam_optics     = False
+    is_likely_ai_noise          = False
+
+    if is_likely_screenshot:
+        findings.append(
+            f"Karakteristik tangkapan layar digital terdeteksi: rasio piksel identik "
+            f"({zero_diff_ratio*100:.1f}%), ketiadaan noise sensor foton alami, "
+            f"dan dominasi warna UI murni ({pure_color_ratio*100:.1f}%)."
+        )
+    elif halo_ratio > 38.0 and avg_noise_std < 7.0:
         is_likely_smartphone_optics = True
-        findings.append(f"Terdeteksi sharpening halo tinggi (Rasio: {halo_ratio:.1f}), karakteristik kuat dari computational photography smartphone.")
+        findings.append(
+            f"Terdeteksi sharpening halo tinggi (Rasio: {halo_ratio:.1f}), "
+            "karakteristik kuat dari computational photography smartphone."
+        )
     elif avg_noise_std >= 2.5 and halo_ratio < 28.0 and edge_energy < 150.0:
         is_likely_webcam_optics = True
-        findings.append(f"Karakteristik optik webcam/laptop terdeteksi: noise indoor moderat ({avg_noise_std:.2f}) dengan kontras tepi lembut tanpa ISP sharpening agresif.")
+        findings.append(
+            f"Karakteristik optik webcam/laptop terdeteksi: noise indoor moderat "
+            f"({avg_noise_std:.2f}) dengan kontras tepi lembut tanpa ISP sharpening agresif."
+        )
     elif avg_noise_std >= 3.8 and halo_ratio <= 35.0:
         is_likely_dslr_optics = True
-        findings.append(f"Dispersi noise seimbang ({avg_noise_std:.2f}) dengan transisi tepi optik alami (bebas over-sharpening), karakteristik sensor besar kamera DSLR/Mirrorless.")
+        findings.append(
+            f"Dispersi noise seimbang ({avg_noise_std:.2f}) dengan transisi tepi optik alami "
+            "(bebas over-sharpening), karakteristik sensor besar kamera DSLR/Mirrorless."
+        )
     elif avg_noise_std < 2.2:
         is_likely_ai_noise = True
-        findings.append(f"Level residual noise sangat mendekati nol ({avg_noise_std:.2f}), mengindikasikan ketiadaan sensor fisik (sintesis digital/AI).")
+        findings.append(
+            f"Level residual noise sangat mendekati nol ({avg_noise_std:.2f}), "
+            "mengindikasikan ketiadaan sensor fisik (sintesis digital/AI)."
+        )
         
-    # 3. Visualisasi Noise Residual (ditingkatkan kontrasnya untuk UI)
-    # Skala noise ke 128 tengah
+    # 5. Visualisasi Noise Residual
     vis_noise = np.clip((noise_residual * 5.0) + 128.0, 0, 255).astype(np.uint8)
     noise_img = Image.fromarray(vis_noise)
     noise_img.thumbnail((600, 600))
@@ -95,18 +151,24 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     noise_b64 = base64.b64encode(thumb_buf.getvalue()).decode("utf-8")
     
     return {
-        "avg_noise_std": round(avg_noise_std, 3),
+        "avg_noise_std":            round(avg_noise_std, 3),
         "channel_std": {
             "r": round(std_r, 3),
             "g": round(std_g, 3),
             "b": round(std_b, 3)
         },
-        "edge_energy": round(edge_energy, 2),
-        "halo_ratio": round(halo_ratio, 2),
+        "edge_energy":              round(edge_energy, 2),
+        "halo_ratio":               round(halo_ratio, 2),
+        "zero_diff_ratio":          round(zero_diff_ratio, 4),
+        "pure_color_ratio":         round(pure_color_ratio, 4),
+        "flat_region_score":        round(flat_region_score, 4),
+        "screenshot_score":         round(screenshot_score, 2),
+        "noise_channel_variance":   round(noise_channel_variance, 4),
+        "is_likely_screenshot":     is_likely_screenshot,
         "is_likely_smartphone_optics": is_likely_smartphone_optics,
-        "is_likely_dslr_optics": is_likely_dslr_optics,
-        "is_likely_webcam_optics": is_likely_webcam_optics,
-        "is_likely_ai_noise": is_likely_ai_noise,
-        "noise_image_b64": f"data:image/jpeg;base64,{noise_b64}",
-        "findings": findings
+        "is_likely_dslr_optics":    is_likely_dslr_optics,
+        "is_likely_webcam_optics":  is_likely_webcam_optics,
+        "is_likely_ai_noise":       is_likely_ai_noise,
+        "noise_image_b64":          f"data:image/jpeg;base64,{noise_b64}",
+        "findings":                 findings
     }
