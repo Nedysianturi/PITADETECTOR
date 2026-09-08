@@ -78,8 +78,9 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     hsv_arr = np.array(img.convert("HSV"))
     sat_ratio = float((hsv_arr[:, :, 1] > 180).mean())
 
-    # Elemen grafis/tipografi digital memiliki kontras tepi ekstrim (font/vektor)
-    is_graphic_elements = bool((p99 > 75.0 and sat_ratio > 0.08) or (p99 > 115.0))
+    # Elemen grafis/tipografi digital memiliki kontras tepi sangat tajam (font/vektor p99 > 125)
+    # atau kontras tinggi disertai saturasi grafis dan area warna UI murni
+    is_graphic_elements = bool(p99 > 125.0 or (p99 > 95.0 and sat_ratio > 0.15 and pure_color_ratio > 0.05))
 
     # (e) Perhitungan skor screenshot terpadu
     is_likely_screenshot = False
