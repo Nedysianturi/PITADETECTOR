@@ -62,22 +62,30 @@ def classify_image(
             reasons.append(f"**Karakteristik Sensor Besar**: Rasio crop factor {crop_factor}x khas sensor Full-Frame/APS-C.")
 
     # -------------------------------------------------------------
-    # 2. ANALISIS RESOLUSI LAYAR & ASPEK RASIO
+    # 2. ANALISIS RESOLUSI, ORIENTASI, & ASPEK RASIO
     # -------------------------------------------------------------
     is_screen_res = metadata_res.get("is_screen_resolution", False)
     if is_screen_res:
         score_screenshot += 30.0
         reasons.append(f"**Resolusi Standar Layar Komputer/HP**: Dimensi {w}x{h} px persis cocok dengan format monitor desktop atau layar ponsel standar.")
 
-    # Resolusi khas Webcam / Laptop (720p: 1280x720, VGA: 640x480) - jika bukan screenshot murni
-    is_webcam_resolution = (w, h) in [
-        (1280, 720), (720, 1280),
-        (640, 480), (480, 640),
-        (1280, 960), (960, 1280)
+    # Orientasi Vertikal Mobile (Portrait Smartphone: 9:16, 3:4, 19.5:9 Status/Story)
+    is_vertical_mobile = (h > w) and (
+        abs(aspect_ratio - 1.78) < 0.18 or  # 9:16 (576x1024, 720x1280, 1080x1920)
+        abs(aspect_ratio - 1.33) < 0.18 or  # 3:4 vertical
+        abs(aspect_ratio - 2.05) < 0.30     # 18:9 / 19.5:9 / 20:9 layar ponsel modern
+    )
+    if is_vertical_mobile and not is_screen_res:
+        score_phone += 28.0
+        reasons.append(f"**Format Vertikal Kamera HP**: Dimensi {w}x{h} px (rasio potret {aspect_ratio}:1) adalah format standar jepretan kamera ponsel / WhatsApp / Story.")
+
+    # Resolusi khas Webcam / Laptop: HANYA jika landscape (w > h) karena modul webcam laptop selalu mendatar
+    is_webcam_resolution = (w > h) and (w, h) in [
+        (1280, 720), (640, 480), (1280, 960), (1920, 1080)
     ]
-    if (is_webcam_resolution or (megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot":
+    if (is_webcam_resolution or (w > h and megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot":
         score_webcam += 20.0
-        reasons.append(f"**Resolusi Standar Laptop/Webcam**: Dimensi {w}x{h} px ({megapixels} MP, 16:9/4:3) adalah format modul video conference.")
+        reasons.append(f"**Resolusi Standar Laptop/Webcam**: Dimensi landscape {w}x{h} px ({megapixels} MP, 16:9/4:3) adalah format modul video conference.")
     elif w == h and w in [512, 768, 1024, 1536, 2048]:
         # AI klasik sering menghasilkan 1:1 persis (1024x1024, 512x512)
         score_ai += 25.0
@@ -105,7 +113,7 @@ def classify_image(
         # Sensor fisik kaya frekuensi tinggi alami
         if noise_res.get("halo_ratio", 0) > 35.0:
             score_phone += 15.0
-        elif noise_res.get("halo_ratio", 0) < 25.0 and megapixels <= 2.5:
+        elif noise_res.get("halo_ratio", 0) < 25.0 and megapixels <= 2.5 and (w > h):
             score_webcam += 12.0
         else:
             score_camera += 15.0
@@ -128,16 +136,25 @@ def classify_image(
         score_screenshot += 25.0
         reasons.append(f"**Ciri Grafis Digital UI**: Skor keseragaman piksel tinggi ({screenshot_score:.1f}) mengindikasikan tampilan antarmuka digital.")
     elif avg_noise < 2.2 and not metadata_res.get("has_exif") and not is_screen_res:
-        score_ai += 22.0
-        reasons.append(f"**Absensi Sensor Noise**: Level noise residual sangat rendah ({avg_noise:.2f}), tidak menunjukkan jejak termal sensor silikon fisik.")
-    elif is_webcam_optics:
+        # Pembeda krusial AI vs Foto Terkompresi Medsos:
+        # AI sejati memiliki artefak spektral (spectral_anomaly >= 0.35) ATAU signature ATAU rasio 1:1.
+        # Foto HP asli yang dikompres WhatsApp/IG memiliki noise rendah karena kompresi/denoising, tetapi spektrum frekuensi fotonya alami (spectral_anomaly == 0).
+        if spectral_anomaly >= 0.35 or len(ai_sigs) > 0 or (w == h and w in [512, 768, 1024]):
+            score_ai += 25.0
+            reasons.append(f"**Absensi Sensor Noise**: Level noise residual sangat rendah ({avg_noise:.2f}), konsisten dengan sintesis digital kecerdasan buatan.")
+        elif is_vertical_mobile or (megapixels <= 2.5 and not is_screenshot):
+            score_phone += 22.0
+            reasons.append(f"**Denoising & Kompresi Medsos**: Noise halus ({avg_noise:.2f}) dengan spektrum frekuensi alami, konsisten dengan pemrosesan ISP ponsel / kompresi WhatsApp.")
+        else:
+            score_ai += 10.0
+    elif is_webcam_optics and (w > h):
         score_webcam += 25.0
         reasons.append(f"**Optik Lensa Webcam/Laptop**: Ditemukan noise indoor ({avg_noise:.2f}) dengan kontras tepi lembut tanpa ISP neural penajaman ekstrem.")
-    elif avg_noise >= 3.5:
-        if halo_ratio > 36.0:
+    elif avg_noise >= 3.0:
+        if halo_ratio > 34.0:
             score_phone += 22.0
             reasons.append(f"**Sharpening Komputasi Terdeteksi**: Tepi objek memiliki halo penajaman digital agresif (Halo Ratio {halo_ratio:.1f}) khas algoritma ISP ponsel pintar.")
-        elif halo_ratio <= 32.0 and megapixels >= 5.0:
+        elif halo_ratio <= 32.0 and megapixels >= 4.0:
             score_camera += 20.0
             reasons.append(f"**Tekstur Grain Sensor Alami**: Distribusi noise Poisson-Gaussian ({avg_noise:.2f}) dengan transisi tepi optik halus tanpa penajaman digital berlebih.")
 
@@ -146,19 +163,28 @@ def classify_image(
     # -------------------------------------------------------------
     mean_ela = ela_res.get("mean_error", 0.0)
     if mean_ela < 1.6 and not metadata_res.get("has_exif") and not is_screenshot:
-        score_ai += 12.0
+        if spectral_anomaly >= 0.35 or len(ai_sigs) > 0 or (w == h and w in [512, 768, 1024]):
+            score_ai += 12.0
+        elif is_vertical_mobile:
+            score_phone += 10.0
     elif mean_ela > 6.5 and halo_ratio > 35.0:
         score_phone += 10.0
 
     # -------------------------------------------------------------
-    # 6. PENGECEKAN KETIADAAN EXIF
+    # 6. PENGECEKAN KETIADAAN EXIF & MEDIA SOSIAL
     # -------------------------------------------------------------
     if not metadata_res.get("has_exif"):
         if is_screenshot or is_screen_res:
             score_screenshot += 10.0
+        elif is_vertical_mobile:
+            # Foto HP di media sosial (WhatsApp/IG) hampir 100% selalu dihapus EXIF-nya oleh server medsos
+            score_phone += 18.0
+            reasons.append("**Metadata Terhapus Kompresi Medsos**: Ketiadaan EXIF dengan format rasio potret konsisten dengan foto kamera HP yang dikirim melalui aplikasi perpesanan/medsos.")
+        elif spectral_anomaly >= 0.35 or len(ai_sigs) > 0:
+            score_ai += 10.0
         else:
-            score_ai += 8.0
-            score_webcam += 5.0
+            score_phone += 8.0
+            score_webcam += 4.0
 
     # -------------------------------------------------------------
     # NORMALISASI PROBABILITAS (5 Kategori)
@@ -172,7 +198,7 @@ def classify_image(
     
     # Penyesuaian akhir agar total tepat 100%
     diff = round(100.0 - (prob_ai + prob_phone + prob_camera + prob_webcam + prob_screenshot), 1)
-    prob_ai += diff
+    prob_phone += diff
     prob_ai = round(max(0.0, min(100.0, prob_ai)), 1)
     prob_phone = round(max(0.0, min(100.0, prob_phone)), 1)
     prob_camera = round(max(0.0, min(100.0, prob_camera)), 1)
