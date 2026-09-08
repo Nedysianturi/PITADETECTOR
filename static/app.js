@@ -478,4 +478,234 @@ document.addEventListener("DOMContentLoaded", () => {
             metricsTableBody.appendChild(tr);
         });
     }
+
+    // -------------------------------------------------------------
+    // TOMBOL ANALISIS ULANG
+    // -------------------------------------------------------------
+    const btnAnalyzeAgain = document.getElementById("btnAnalyzeAgain");
+    if (btnAnalyzeAgain) {
+        btnAnalyzeAgain.addEventListener("click", () => {
+            resultsSection.style.display = "none";
+            currentAnalysisData = null;
+            fileInput.value = "";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+    }
+
+    // -------------------------------------------------------------
+    // GENERATE & UNDUH LAPORAN PDF
+    // -------------------------------------------------------------
+    const btnDownloadPdf = document.getElementById("btnDownloadPdf");
+    if (btnDownloadPdf) {
+        btnDownloadPdf.addEventListener("click", generatePDF);
+    }
+
+    async function generatePDF() {
+        if (!currentAnalysisData) return;
+        const data = currentAnalysisData;
+        const cl = data.classification;
+        const btn = document.getElementById("btnDownloadPdf");
+
+        // Show loading state
+        btn.classList.add("loading");
+        btn.querySelector("span") && (btn.querySelector("span").textContent = "Memproses...");
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Memproses...`;
+
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+            const W = 210, margin = 18;
+            let y = 0;
+
+            // ── HEADER GRADIENT BAR ──
+            doc.setFillColor(6, 182, 212);
+            doc.rect(0, 0, W, 18, "F");
+            doc.setFillColor(99, 102, 241);
+            doc.rect(W / 2, 0, W / 2, 18, "F");
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(13);
+            doc.setFont("helvetica", "bold");
+            doc.text("PITA DETECTOR", margin, 12);
+            doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
+            doc.text("Laporan Forensik Citra Digital", margin, 16.5);
+            const now = new Date();
+            doc.text(now.toLocaleString("id-ID"), W - margin, 12, { align: "right" });
+            doc.text("github.com/Nedysianturi/PITADETECTOR", W - margin, 16.5, { align: "right" });
+            y = 26;
+
+            // ── VERDICT CARD ──
+            const verdictColors = {
+                ai:               [239, 68,  68],
+                smartphone:       [59,  130, 246],
+                dedicated_camera: [16,  185, 129],
+                webcam:           [168, 85,  247]
+            };
+            const [r, g, b] = verdictColors[cl.verdict] || [100, 116, 139];
+            doc.setFillColor(r, g, b);
+            doc.roundedRect(margin, y, W - margin * 2, 28, 3, 3, "F");
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text(`${cl.verdict_icon}  ${cl.verdict_label}`, margin + 6, y + 10);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Keyakinan: ${cl.confidence}  •  Skor Tertinggi: ${cl.top_probability}%`, margin + 6, y + 18);
+            doc.text(`Dianalisis oleh Pita Detector Forensics Engine`, margin + 6, y + 24);
+            y += 36;
+
+            // ── PROBABILITAS ──
+            doc.setTextColor(30, 41, 59);
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text("DISTRIBUSI PROBABILITAS", margin, y);
+            y += 5;
+            const probEntries = [
+                { label: "Buatan AI",           key: "ai",               color: [239, 68, 68] },
+                { label: "Kamera HP",            key: "smartphone",       color: [59, 130, 246] },
+                { label: "Kamera DSLR/Mirrorless", key: "dedicated_camera", color: [16, 185, 129] },
+                { label: "Webcam / Laptop",      key: "webcam",           color: [168, 85, 247] }
+            ];
+            const barW = (W - margin * 2 - 8) / 2;
+            probEntries.forEach((p, i) => {
+                const col = i % 2 === 0 ? margin : margin + barW + 8;
+                if (i % 2 === 0 && i > 0) y += 14;
+                const pct = (cl.probabilities[p.key] || 0);
+                doc.setFillColor(230, 232, 240);
+                doc.roundedRect(col, y, barW, 5, 1, 1, "F");
+                doc.setFillColor(...p.color);
+                doc.roundedRect(col, y, barW * pct / 100, 5, 1, 1, "F");
+                doc.setTextColor(30, 41, 59);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.text(`${p.label}`, col, y - 1);
+                doc.setFont("helvetica", "bold");
+                doc.text(`${pct}%`, col + barW, y - 1, { align: "right" });
+            });
+            y += 20;
+
+            // ── ALASAN FORENSIK ──
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(30, 41, 59);
+            doc.text("ALASAN FORENSIK", margin, y);
+            y += 5;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.5);
+            (cl.reasons || []).forEach((reason, i) => {
+                const clean = reason.replace(/\*\*/g, "");
+                const lines = doc.splitTextToSize(`${i + 1}. ${clean}`, W - margin * 2 - 4);
+                doc.setFillColor(248, 250, 252);
+                doc.roundedRect(margin, y, W - margin * 2, lines.length * 5 + 4, 2, 2, "F");
+                doc.setTextColor(51, 65, 85);
+                doc.text(lines, margin + 3, y + 5);
+                y += lines.length * 5 + 7;
+                if (y > 260) { doc.addPage(); y = margin; }
+            });
+            y += 3;
+
+            // ── METADATA EXIF ──
+            const meta = data.metadata || {};
+            if (meta.make || meta.model || meta.software || meta.datetime) {
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(30, 41, 59);
+                doc.text("DATA PERANGKAT & EXIF", margin, y);
+                y += 5;
+                const exifRows = [
+                    ["Pabrikan",    meta.make      || "-"],
+                    ["Model",       meta.model     || "-"],
+                    ["Software",    meta.software  || "-"],
+                    ["Waktu Jepret",meta.datetime  || "-"],
+                    ["Resolusi",    meta.width && meta.height ? `${meta.width} x ${meta.height} px` : "-"],
+                    ["GPS",         meta.gps_lat && meta.gps_lon ? `${meta.gps_lat}, ${meta.gps_lon}` : "Tidak ada"],
+                ];
+                doc.setFontSize(8.5);
+                exifRows.forEach(([k, v], i) => {
+                    const bg = i % 2 === 0 ? [248, 250, 252] : [255, 255, 255];
+                    doc.setFillColor(...bg);
+                    doc.rect(margin, y, W - margin * 2, 6, "F");
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(k, margin + 2, y + 4.5);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(30, 41, 59);
+                    const vLines = doc.splitTextToSize(String(v), W - margin * 2 - 50);
+                    doc.text(vLines[0] || "-", margin + 55, y + 4.5);
+                    y += 6;
+                });
+                y += 5;
+            }
+
+            // ── METRIK SINYAL ──
+            if (y > 240) { doc.addPage(); y = margin; }
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.setTextColor(30, 41, 59);
+            doc.text("METRIK SINYAL & SPEKTRAL", margin, y);
+            y += 5;
+            const signalRows = [
+                ["Noise Sensor (σ)",         data.noise?.noise_std        ?? "-"],
+                ["Mean Error ELA",           data.ela?.mean_error         ?? "-"],
+                ["Kurtosis FFT Tinggi",      data.frequency?.hf_kurtosis  ?? "-"],
+                ["Rasio Energi Tinggi",      data.frequency?.high_energy_ratio != null
+                                            ? `${(data.frequency.high_energy_ratio * 100).toFixed(1)}%`
+                                            : "-"],
+            ];
+            doc.setFontSize(8.5);
+            signalRows.forEach(([k, v], i) => {
+                const bg = i % 2 === 0 ? [248, 250, 252] : [255, 255, 255];
+                doc.setFillColor(...bg);
+                doc.rect(margin, y, W - margin * 2, 6, "F");
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(100, 116, 139);
+                doc.text(k, margin + 2, y + 4.5);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(30, 41, 59);
+                doc.text(String(v), margin + 80, y + 4.5);
+                y += 6;
+            });
+
+            // ── GAMBAR YANG DIANALISIS (jika ada) ──
+            const imgSrc = mainDisplayImg ? mainDisplayImg.src : null;
+            if (imgSrc && imgSrc.startsWith("data:")) {
+                if (y > 200) { doc.addPage(); y = margin; }
+                else y += 8;
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10);
+                doc.setTextColor(30, 41, 59);
+                doc.text("GAMBAR YANG DIANALISIS", margin, y);
+                y += 4;
+                const maxImgW = W - margin * 2;
+                const maxImgH = 70;
+                doc.addImage(imgSrc, "JPEG", margin, y, maxImgW, maxImgH, undefined, "FAST");
+                y += maxImgH + 4;
+            }
+
+            // ── FOOTER ──
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFillColor(248, 250, 252);
+                doc.rect(0, 287, W, 10, "F");
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7);
+                doc.setTextColor(148, 163, 184);
+                doc.text("Pita Detector Forensics — Laporan ini dibuat otomatis. Tidak menggantikan analisis ahli.", margin, 293);
+                doc.text(`Hal. ${i} / ${pageCount}`, W - margin, 293, { align: "right" });
+            }
+
+            // Simpan file
+            const fname = `pita-detector-report-${now.toISOString().slice(0, 10)}.pdf`;
+            doc.save(fname);
+
+        } catch (err) {
+            console.error("PDF generation failed:", err);
+            alert("Gagal membuat PDF. Pastikan koneksi internet aktif (diperlukan untuk memuat library PDF).");
+        } finally {
+            btn.classList.remove("loading");
+            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Unduh Laporan PDF`;
+        }
+    }
+
 });
