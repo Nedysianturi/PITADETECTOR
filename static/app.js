@@ -316,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (cls.verdict === "webcam") {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera laptop / webcam dengan format video call, optik fixed-focus lembut, dan noise sensor indoor.";
         } else if (cls.verdict === "screenshot") {
-            verdictSummary.textContent = "Gambar teridentifikasi sebagai tangkapan layar (screenshot) dengan zero-noise optik, piksel UI ter-render presisi, dan ketiadaan sensor fisik.";
+            verdictSummary.textContent = "Gambar teridentifikasi sebagai tangkapan layar atau desain grafis digital (poster/flyer/banner) dengan tipografi tajam, warna grafis sintetis, dan ketiadaan sensor fisik optik.";
         } else {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera dedicated (DSLR / Mirrorless) dengan optik fisik murni dan noise sensor alami.";
         }
@@ -583,7 +583,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 { label: "Kamera HP",            key: "smartphone",       color: [59, 130, 246] },
                 { label: "Kamera DSLR/Mirrorless", key: "dedicated_camera", color: [16, 185, 129] },
                 { label: "Webcam / Laptop",      key: "webcam",           color: [168, 85, 247] },
-                { label: "Screenshot / Layar",   key: "screenshot",       color: [245, 158, 11] }
+                { label: "Screenshot / Desain Grafis", key: "screenshot",   color: [245, 158, 11] }
             ];
             const barW = (W - margin * 2 - 8) / 2;
             probEntries.forEach((p, i) => {
