@@ -46,7 +46,16 @@ def classify_image(
     has_exif = metadata_res.get("has_exif", False)
     has_camera_hardware_exif = bool(has_exif and device_cat in ["dedicated_camera", "smartphone", "webcam"])
 
-    if device_cat == "screenshot":
+    is_canva_sig = metadata_res.get("is_canva_signature", False)
+    is_canva_fn = metadata_res.get("is_canva_filename", False)
+    canva_preset = metadata_res.get("canva_preset_name")
+    is_canva_detected = False
+
+    if device_cat == "canva" or is_canva_sig:
+        score_screenshot += 110.0
+        is_canva_detected = True
+        reasons.append("**Platform Desain Canva Terverifikasi**: Metadata berkas memuat tanda tangan digital resmi / header ekspor platform Canva (canva.com).")
+    elif device_cat == "screenshot":
         score_screenshot += 85.0
         reasons.append(f"**Perangkat Tangkapan Layar Terdeteksi**: Metadata/Nama file mengindikasikan software screenshot ({metadata_res.get('software') or 'Screen Capture Tool'}).")
     elif device_cat == "webcam":
@@ -88,13 +97,29 @@ def classify_image(
         score_screenshot += 30.0
         reasons.append(f"**Resolusi Standar Layar Komputer/HP**: Dimensi {w}x{h} px persis cocok dengan format monitor desktop atau layar ponsel standar.")
 
+    # Deteksi format template kanvas Canva standar
+    if canva_preset and not has_camera_hardware_exif:
+        if is_canva_fn or is_canva_sig:
+            score_screenshot += 40.0
+            is_canva_detected = True
+            reasons.append(f"**Template Kanvas Canva Terverifikasi**: Format dimensi {w}x{h} px cocok dengan template {canva_preset} resmi Canva.")
+        elif device_cat != "screenshot" and not is_screen_res and is_graphic:
+            score_screenshot += 35.0
+            is_canva_detected = True
+            reasons.append(f"**Template Kanvas Canva Terdeteksi**: Format dimensi {w}x{h} px cocok dengan template kanvas {canva_preset} standar Canva.")
+        elif device_cat != "screenshot" and (w, h) in [(1080, 1080), (1024, 1024), (1080, 1350), (1587, 2245), (2480, 3508), (1414, 2000)]:
+            score_screenshot += 30.0
+            if is_graphic:
+                is_canva_detected = True
+                reasons.append(f"**Template Kanvas Canva Terdeteksi**: Format dimensi {w}x{h} px cocok dengan template kanvas {canva_preset} standar Canva.")
+
     # Orientasi Vertikal Mobile (Portrait Smartphone: 9:16, 3:4, 19.5:9 Status/Story)
     is_vertical_mobile = (h > w) and (
         abs(aspect_ratio - 1.78) < 0.18 or  # 9:16 (576x1024, 720x1280, 1080x1920)
         abs(aspect_ratio - 1.33) < 0.18 or  # 3:4 vertical
         abs(aspect_ratio - 2.05) < 0.30     # 18:9 / 19.5:9 / 20:9 layar ponsel modern
     )
-    if is_vertical_mobile and not is_screen_res and not is_graphic:
+    if is_vertical_mobile and not is_screen_res and not is_graphic and not is_canva_detected:
         score_phone += 28.0
         reasons.append(f"**Format Vertikal Kamera HP**: Dimensi {w}x{h} px (rasio potret {aspect_ratio}:1) adalah format standar jepretan kamera ponsel / WhatsApp / Story.")
 
@@ -102,10 +127,10 @@ def classify_image(
     is_webcam_resolution = (w > h) and (w, h) in [
         (1280, 720), (640, 480), (1280, 960), (1920, 1080)
     ]
-    if (is_webcam_resolution or (w > h and megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot" and not is_graphic and not has_camera_hardware_exif:
+    if (is_webcam_resolution or (w > h and megapixels <= 2.1 and abs(aspect_ratio - 1.78) < 0.05)) and device_cat != "screenshot" and not is_graphic and not has_camera_hardware_exif and not is_canva_detected:
         score_webcam += 20.0
         reasons.append(f"**Resolusi Standar Laptop/Webcam**: Dimensi landscape {w}x{h} px ({megapixels} MP, 16:9/4:3) adalah format modul video conference.")
-    elif w == h and not is_graphic and (w in [512, 768, 1024, 1536, 2048]):
+    elif w == h and not is_graphic and not is_canva_detected and (w in [512, 768, 1024, 1536, 2048]):
         # Format 1:1 simetris tanpa teks adalah ciri khas generator model difusi
         score_ai += 25.0
         reasons.append(f"**Resolusi Standar Generator AI**: Dimensi simetris persis {w}x{h} px sangat umum pada checkpoint model difusi.")
@@ -128,7 +153,7 @@ def classify_image(
     if spectral_anomaly >= 0.4 and not noise_res.get("is_likely_screenshot", False):
         score_ai += 25.0 * spectral_anomaly
         reasons.append(f"**Anomali Spektral Difusi**: Terdeteksi lonjakan frekuensi diskrit (kurtosis {hf_kurt:.1f}) yang konsisten dengan artefak dekonvolusi AI.")
-    elif high_energy > 0.18 and not is_graphic:
+    elif high_energy > 0.18 and not is_graphic and not is_canva_detected:
         # Sensor fisik kaya frekuensi tinggi alami
         if noise_res.get("halo_ratio", 0) > 35.0:
             score_phone += 15.0
@@ -138,7 +163,7 @@ def classify_image(
             score_camera += 15.0
 
     # -------------------------------------------------------------
-    # 4. ANALISIS NOISE SENSOR & DETEKSI ELEMEN GRAFIS / POSTER
+    # 4. ANALISIS NOISE SENSOR & DETEKSI ELEMEN GRAFIS / POSTER / CANVA
     # -------------------------------------------------------------
     avg_noise = noise_res.get("avg_noise_std", 0.0)
     halo_ratio = noise_res.get("halo_ratio", 0.0)
@@ -148,16 +173,22 @@ def classify_image(
     pure_color_ratio = noise_res.get("pure_color_ratio", 0.0)
     is_webcam_optics = noise_res.get("is_likely_webcam_optics", False)
 
-    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Flyer / Banner Promosi
+    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Flyer / Banner Promosi / Canva
     if is_graphic:
         if len(ai_sigs) > 0 or spectral_anomaly >= 0.40:
             score_ai += 75.0
             reasons.append("**Generasi AI Terverifikasi**: Ditemukan jejak/anomali generator AI pada berkas desain.")
         elif not has_camera_hardware_exif:
-            # Poster promosi, flyer Canva/Photoshop, atau tangkapan layar dokumen tanpa EXIF kamera fisik
-            score_screenshot += 85.0
-            reasons.append(f"**Desain Grafis / Poster Digital Terdeteksi**: Memuat tipografi teks digital berkontras tinggi (Laplacian p99 {lap_p99:.1f}), blok warna sintetis ({sat_ratio*100:.1f}%), dan elemen tata letak promosi non-kamera.")
-            reasons.append("**Bukan Jepretan Kamera Fisik**: Citra merupakan hasil tata letak digital (Canva / Desain Poster / Tangkapan Media Sosial), bukan foto langsung dari sensor kamera optik.")
+            if is_canva_detected or is_canva_fn or is_canva_sig or (canva_preset and device_cat != "screenshot" and not is_screen_res):
+                score_screenshot += 95.0
+                is_canva_detected = True
+                reasons.append(f"**Desain Grafis Canva Terdeteksi**: Tata letak digital Canva memuat tipografi teks berkontras tinggi (Laplacian p99 {lap_p99:.1f}), blok warna sintetis ({sat_ratio*100:.1f}%), dan elemen grafis vektor non-kamera.")
+                reasons.append("**Bukan Jepretan Kamera Fisik**: Citra merupakan hasil tata letak desain grafis digital Canva, bukan foto langsung dari sensor optik kamera.")
+            else:
+                # Poster promosi, flyer Canva/Photoshop, atau tangkapan layar dokumen tanpa EXIF kamera fisik
+                score_screenshot += 85.0
+                reasons.append(f"**Desain Grafis / Poster Digital Terdeteksi**: Memuat tipografi teks digital berkontras tinggi (Laplacian p99 {lap_p99:.1f}), blok warna sintetis ({sat_ratio*100:.1f}%), dan elemen tata letak promosi non-kamera.")
+                reasons.append("**Bukan Jepretan Kamera Fisik**: Citra merupakan hasil tata letak digital (Canva / Desain Poster / Tangkapan Media Sosial), bukan foto langsung dari sensor kamera optik.")
         else:
             # Objek nyata dalam bidikan kamera (spanduk panggung, banner backdrop, teks pameran)
             reasons.append(f"**Objek Spanduk / Teks Terdeteksi**: Terdeteksi elemen tulisan/spanduk panggung pada latar bidikan (Laplacian p99 {lap_p99:.1f}), ditangkap langsung oleh sensor kamera optik.")
@@ -250,12 +281,15 @@ def classify_image(
     prob_screenshot = round(max(0.0, min(100.0, prob_screenshot)), 1)
 
     # Tentukan pemenang
+    screenshot_label = "Desain Grafis Canva (canva.com)" if is_canva_detected else "Tangkapan Layar / Desain Grafis"
+    screenshot_icon = "🎨" if is_canva_detected else "🖥️"
+
     scores = [
         ("ai", prob_ai, "Kecerdasan Buatan (Generative AI)", "🤖"),
         ("smartphone", prob_phone, "Kamera Smartphone (HP)", "📱"),
         ("dedicated_camera", prob_camera, "Kamera Dedicated (DSLR/Mirrorless)", "📷"),
         ("webcam", prob_webcam, "Kamera Laptop / Webcam", "💻"),
-        ("screenshot", prob_screenshot, "Tangkapan Layar / Desain Grafis", "🖥️")
+        ("screenshot", prob_screenshot, screenshot_label, screenshot_icon)
     ]
     scores.sort(key=lambda x: x[1], reverse=True)
     top_cat, top_prob, top_label, top_icon = scores[0]
@@ -266,6 +300,8 @@ def classify_image(
         "verdict": top_cat,
         "verdict_label": top_label,
         "verdict_icon": top_icon,
+        "is_canva_detected": is_canva_detected,
+        "canva_preset": canva_preset,
         "top_probability": top_prob,
         "confidence": confidence,
         "probabilities": {

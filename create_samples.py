@@ -166,7 +166,57 @@ def create_samples():
     sc_png_info = PngImagePlugin.PngInfo()
     sc_png_info.add_text("Software", "Microsoft Windows Snipping Tool")
     sc_img.save("samples/sample_screenshot.png", "png", pnginfo=sc_png_info)
-    print("Sampel berhasil dibuat di folder samples/!")
+
+    # 6. Sampel Desain Grafis Canva (JPEG 1080x1080 Instagram Post dengan metadata Canva)
+    print("Membuat sampel Desain Canva...")
+    cv_w, cv_h = 1080, 1080
+    cv_arr = np.zeros((cv_h, cv_w, 3), dtype=np.uint8)
+    
+    # Latar gradien ungu-indigo khas template Canva (#4f46e5 -> #7c3aed)
+    for y in range(cv_h):
+        ratio = y / cv_h
+        r_val = int(79 + ratio * (124 - 79))
+        g_val = int(70 + ratio * (58 - 70))
+        b_val = int(229 + ratio * (237 - 229))
+        cv_arr[y, :] = [r_val, g_val, b_val]
+        
+    # Elemen kartu putih poster (#ffffff)
+    cv_arr[150:930, 120:960] = [255, 255, 255]
+    
+    # Header kartu warna aksen Canva Cyan (#06b6d4)
+    cv_arr[150:230, 120:960] = [6, 182, 212]
+    
+    # Badge promo (#f43f5e)
+    cv_arr[270:330, 180:480] = [244, 63, 94]
+    
+    # Blok tipografi judul poster Canva (#1e1b4b)
+    cv_arr[370:420, 180:880] = [30, 27, 75]
+    cv_arr[440:480, 180:750] = [30, 27, 75]
+    cv_arr[510:540, 180:600] = [79, 70, 229]
+    
+    # Blok paragraf / teks deskripsi
+    for y_pos in [580, 615, 650, 685]:
+        cv_arr[y_pos:y_pos+16, 180:860] = [100, 116, 139]
+        
+    # Tombol Call-to-Action (#10b981)
+    cv_arr[760:840, 320:760] = [16, 185, 129]
+    # Teks tombol CTA (#ffffff)
+    cv_arr[790:810, 420:660] = [255, 255, 255]
+    
+    cv_img = Image.fromarray(cv_arr)
+    
+    # Tambahkan metadata Software Canva
+    canva_exif = {
+        "0th": {
+            piexif.ImageIFD.Software: "Canva (canva.com)",
+            piexif.ImageIFD.ImageDescription: "Canva Design Template Instagram Post",
+            piexif.ImageIFD.DateTime: "2026:09:08 14:00:00"
+        }
+    }
+    canva_exif_bytes = piexif.dump(canva_exif)
+    cv_img.save("samples/sample_canva.jpg", "jpeg", quality=92, exif=canva_exif_bytes)
+
+    print("Semua sampel berhasil dibuat di folder samples/!")
 
 if __name__ == "__main__":
     create_samples()

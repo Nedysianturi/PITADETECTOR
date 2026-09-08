@@ -144,6 +144,13 @@ async def list_samples():
             "description": "Tangkapan layar resolusi 1920x1080 dengan elemen UI grafis & zero noise",
             "filename": "sample_screenshot.png",
             "icon": "🖥️"
+        },
+        {
+            "id": "canva",
+            "name": "Sampel Desain Canva (1080x1080 Post)",
+            "description": "Desain poster template Canva dengan tipografi tajam, warna grafis sintetis & kanvas 1:1",
+            "filename": "sample_canva.jpg",
+            "icon": "🎨"
         }
     ]
     return samples
@@ -156,7 +163,8 @@ async def analyze_sample(sample_id: str):
         "smartphone": "sample_smartphone.jpg",
         "dslr": "sample_dslr.jpg",
         "webcam": "sample_webcam.jpg",
-        "screenshot": "sample_screenshot.png"
+        "screenshot": "sample_screenshot.png",
+        "canva": "sample_canva.jpg"
     }
     if sample_id not in file_map:
         raise HTTPException(status_code=404, detail="Sampel tidak ditemukan.")

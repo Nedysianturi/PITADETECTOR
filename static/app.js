@@ -316,9 +316,22 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (cls.verdict === "webcam") {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera laptop / webcam dengan format video call, optik fixed-focus lembut, dan noise sensor indoor.";
         } else if (cls.verdict === "screenshot") {
-            verdictSummary.textContent = "Gambar teridentifikasi sebagai tangkapan layar atau desain grafis digital (poster/flyer/banner) dengan tipografi tajam, warna grafis sintetis, dan ketiadaan sensor fisik optik.";
+            if (cls.is_canva_detected) {
+                verdictSummary.textContent = "Gambar teridentifikasi sebagai hasil desain grafis dari platform Canva dengan tipografi digital tajam, blok warna sintetis, dan format kanvas standar template Canva.";
+            } else {
+                verdictSummary.textContent = "Gambar teridentifikasi sebagai tangkapan layar atau desain grafis digital (poster/flyer/banner) dengan tipografi tajam, warna grafis sintetis, dan ketiadaan sensor fisik optik.";
+            }
         } else {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera dedicated (DSLR / Mirrorless) dengan optik fisik murni dan noise sensor alami.";
+        }
+
+        const probScreenshotName = document.getElementById("probScreenshotName");
+        if (probScreenshotName) {
+            if (cls.is_canva_detected) {
+                probScreenshotName.textContent = "🎨 Desain Grafis Canva";
+            } else {
+                probScreenshotName.textContent = "🖥️ Tangkapan Layar / Desain Grafis";
+            }
         }
 
         // 2. Probabilities
@@ -557,7 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 smartphone:       [59,  130, 246],
                 dedicated_camera: [16,  185, 129],
                 webcam:           [168, 85,  247],
-                screenshot:       [245, 158, 11]
+                screenshot:       cl.is_canva_detected ? [124, 58, 237] : [245, 158, 11]
             };
             const [r, g, b] = verdictColors[cl.verdict] || [100, 116, 139];
             doc.setFillColor(r, g, b);
