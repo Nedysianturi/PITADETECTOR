@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pita Detector | AI & Camera Origin Detector</title>
+    <meta name="description" content="Sistem deteksi forensik citra digital untuk membedakan foto kamera HP, kamera DSLR/Mirrorless, dan buatan AI.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-background">
+        <div class="glow-sphere sphere-1"></div>
+        <div class="glow-sphere sphere-2"></div>
+        <div class="grid-overlay"></div>
+    </div>
+
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-badge">
+                    <span class="pulse-dot"></span>
+                    <span>FORENSIC ENGINE v1.0</span>
+                </div>
+                <h1 class="brand-title">PITA<span>DETECTOR</span></h1>
+                <p class="brand-subtitle">Detektor Asal Citra: Kamera HP • Kamera DSLR • Laptop/Webcam • Buatan AI</p>
+            </div>
+            <div class="header-actions">
+                <div class="status-pill online">
+                    <span class="status-indicator"></span>
+                    <span>Offline Engine Ready</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container">
+        <!-- Top Section: Upload & Quick Samples -->
+        <section class="upload-section">
+            <div class="upload-card" id="dropZone">
+                <input type="file" id="fileInput" accept="image/*" class="file-input-hidden">
+                <div class="upload-inner">
+                    <div class="upload-icon-wrapper">
+                        <svg class="upload-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3 class="upload-title">Tarik & Lepaskan Gambar di Sini</h3>
+                    <p class="upload-hint">Mendukung JPEG, PNG, WEBP hingga 25MB • Atau tekan <kbd>Ctrl</kbd> + <kbd>V</kbd> untuk Paste</p>
+                    <div class="upload-actions-row">
+                        <button class="btn-primary" id="btnBrowse">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                            Pilih Gambar dari Komputer
+                        </button>
+                        <button class="btn-secondary" id="btnOpenCamera">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            Jepret Langsung via Webcam
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Camera Viewfinder Modal -->
+            <div class="camera-modal-backdrop" id="cameraModal" style="display: none;">
+                <div class="camera-modal-card">
+                    <div class="camera-modal-header">
+                        <div class="camera-modal-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <span>Live Viewfinder Kamera Laptop / Webcam</span>
+                        </div>
+                        <button class="btn-close-modal" id="btnCloseCamera" title="Tutup">&times;</button>
+                    </div>
+                    <div class="camera-viewfinder-box">
+                        <video id="cameraVideo" autoplay playsinline muted></video>
+                        <div class="camera-reticle">
+                            <div class="reticle-corner tl"></div>
+                            <div class="reticle-corner tr"></div>
+                            <div class="reticle-corner bl"></div>
+                            <div class="reticle-corner br"></div>
+                            <div class="reticle-center"></div>
+                        </div>
+                        <div class="camera-resolution-tag" id="cameraResTag">Menghubungkan ke kamera...</div>
+                    </div>
+                    <div class="camera-modal-footer">
+                        <select id="cameraDeviceSelect" class="camera-select-input"></select>
+                        <button class="btn-shutter" id="btnSnapPhoto">
+                            <span class="shutter-inner"></span>
+                            <span>Jepret & Analisis</span>
+                        </button>
+                        <button class="btn-cancel" id="btnCancelCamera">Batal</button>
+                    </div>
+                </div>
+            </div>
+            <canvas id="snapshotCanvas" style="display: none;"></canvas>
+
+            <div class="quick-samples-bar">
+                <span class="samples-label">Uji Cepat Sampel:</span>
+                <div class="sample-buttons">
+                    <button class="btn-sample" data-sample="ai">
+                        <span class="btn-sample-icon">🤖</span>
+                        <span>Sampel AI (Diffusion)</span>
+                    </button>
+                    <button class="btn-sample" data-sample="smartphone">
+                        <span class="btn-sample-icon">📱</span>
+                        <span>Sampel Kamera HP</span>
+                    </button>
+                    <button class="btn-sample" data-sample="dslr">
+                        <span class="btn-sample-icon">📷</span>
+                        <span>Sampel Kamera DSLR</span>
+                    </button>
+                    <button class="btn-sample" data-sample="webcam">
+                        <span class="btn-sample-icon">💻</span>
+                        <span>Sampel Laptop / Webcam</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading State -->
+        <section class="loading-section" id="loadingSection" style="display: none;">
+            <div class="radar-scanner">
+                <div class="scanner-circle"></div>
+                <div class="scanner-line"></div>
+                <div class="scanner-dot"></div>
+            </div>
+            <h3 class="loading-title">Menjalankan Forensik Citra...</h3>
+            <p class="loading-step" id="loadingStep">Membedah EXIF, ELA kompresi, 2D FFT, dan residual noise sensor</p>
+        </section>
+
+        <!-- Result Section (Initially Hidden) -->
+        <section class="results-section" id="resultsSection" style="display: none;">
+            <!-- Hero Verdict Card -->
+            <div class="verdict-card" id="verdictCard">
+                <div class="verdict-header">
+                    <div class="verdict-icon-container" id="verdictIcon">🤖</div>
+                    <div class="verdict-info">
+                        <div class="verdict-meta-tag">
+                            <span>HASIL ANALISIS FORENSIK</span>
+                            <span class="badge-confidence" id="confidenceBadge">Keyakinan: Tinggi</span>
+                        </div>
+                        <h2 class="verdict-heading" id="verdictHeading">Kecerdasan Buatan (AI-Generated)</h2>
+                        <p class="verdict-summary" id="verdictSummary">Citra menunjukkan jejak pola sintetis kompresi dan absensi noise sensor fisik.</p>
+                    </div>
+                </div>
+
+                <!-- Probability Gauges -->
+                <div class="prob-bars-grid">
+                    <div class="prob-card prob-ai">
+                        <div class="prob-card-header">
+                            <span class="prob-name">🤖 Buatan AI</span>
+                            <span class="prob-val" id="valAi">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill fill-ai" id="barAi" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="prob-card prob-phone">
+                        <div class="prob-card-header">
+                            <span class="prob-name">📱 Kamera HP</span>
+                            <span class="prob-val" id="valPhone">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill fill-phone" id="barPhone" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="prob-card prob-camera">
+                        <div class="prob-card-header">
+                            <span class="prob-name">📷 Kamera DSLR/Mirrorless</span>
+                            <span class="prob-val" id="valCamera">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill fill-camera" id="barCamera" style="width: 0%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="prob-card prob-webcam">
+                        <div class="prob-card-header">
+                            <span class="prob-name">💻 Laptop / Webcam</span>
+                            <span class="prob-val" id="valWebcam">0%</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill fill-webcam" id="barWebcam" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Two-Column Forensic Suite -->
+            <div class="dashboard-grid">
+                <!-- Left: Interactive Visual Forensics Inspector -->
+                <div class="dashboard-col visual-col">
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h3 class="panel-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+                                Visual Forensics Inspector
+                            </h3>
+                            <div class="mode-tabs">
+                                <button class="mode-btn active" data-mode="original">Foto Asli</button>
+                                <button class="mode-btn" data-mode="ela">ELA Heatmap</button>
+                                <button class="mode-btn" data-mode="fft">2D FFT Spektrum</button>
+                                <button class="mode-btn" data-mode="noise">Noise Residual</button>
+                            </div>
+                        </div>
+
+                        <div class="visual-viewport">
+                            <img id="mainDisplayImg" class="viewport-img" src="" alt="Forensic View">
+                            <div class="viewport-overlay" id="viewportBadge">Foto Asli</div>
+                        </div>
+
+                        <div class="viewport-caption" id="viewportCaption">
+                            Menampilkan citra asli yang diunggah untuk analisis.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Explanations & Technical Breakdown -->
+                <div class="dashboard-col details-col">
+                    <!-- Reasons Card -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h3 class="panel-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                                Dasar Pertimbangan Forensik
+                            </h3>
+                        </div>
+                        <div class="reasons-list" id="reasonsContainer">
+                            <!-- Injected by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- EXIF & Hardware Metadata -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h3 class="panel-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h.01"/><path d="M17 7h.01"/><path d="M7 17h.01"/><path d="M17 17h.01"/></svg>
+                                Data Perangkat & EXIF
+                            </h3>
+                            <span class="badge-mini" id="exifStatusBadge">EXIF Terdeteksi</span>
+                        </div>
+                        <div class="exif-grid" id="exifGrid">
+                            <!-- Injected by JavaScript -->
+                        </div>
+                    </div>
+
+                    <!-- Signal & Metrics Table -->
+                    <div class="panel-card">
+                        <div class="panel-header">
+                            <h3 class="panel-title">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                                Metrik Sinyal & Spektral
+                            </h3>
+                        </div>
+                        <div class="metrics-table-wrapper">
+                            <table class="metrics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter Forensik</th>
+                                        <th>Nilai Citra</th>
+                                        <th>Indikasi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="metricsTableBody">
+                                    <!-- Injected by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>Pita Detector Forensics • Berjalan 100% Mandiri & Lokal di Komputer Anda</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
