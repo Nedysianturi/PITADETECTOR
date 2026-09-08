@@ -26,6 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const barWebcam = document.getElementById("barWebcam");
     const valScreenshot = document.getElementById("valScreenshot");
     const barScreenshot = document.getElementById("barScreenshot");
+    const valScanner = document.getElementById("valScanner");
+    const barScanner = document.getElementById("barScanner");
 
     // Viewport Elements
     const mainDisplayImg = document.getElementById("mainDisplayImg");
@@ -315,6 +317,8 @@ document.addEventListener("DOMContentLoaded", () => {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera smartphone dengan jejak komputasi penajaman (ISP) dan karakteristik sensor kecil.";
         } else if (cls.verdict === "webcam") {
             verdictSummary.textContent = "Gambar teridentifikasi dari kamera laptop / webcam dengan format video call, optik fixed-focus lembut, dan noise sensor indoor.";
+        } else if (cls.verdict === "scanner") {
+            verdictSummary.textContent = "Gambar teridentifikasi sebagai dokumen hasil pemindaian (scan) perangkat printer / scanner fisik dengan sensor flatbed linier dan format kertas baku.";
         } else if (cls.verdict === "screenshot") {
             if (cls.is_canva_detected) {
                 verdictSummary.textContent = "Gambar teridentifikasi sebagai hasil desain grafis dari platform Canva dengan tipografi digital tajam, blok warna sintetis, dan format kanvas standar template Canva.";
@@ -340,12 +344,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const pCamera = cls.probabilities.dedicated_camera || 0;
         const pWebcam = cls.probabilities.webcam || 0;
         const pScreenshot = cls.probabilities.screenshot || 0;
+        const pScanner = cls.probabilities.scanner || 0;
 
         valAi.textContent = `${pAi}%`;
         valPhone.textContent = `${pPhone}%`;
         valCamera.textContent = `${pCamera}%`;
         if (valWebcam) valWebcam.textContent = `${pWebcam}%`;
         if (valScreenshot) valScreenshot.textContent = `${pScreenshot}%`;
+        if (valScanner) valScanner.textContent = `${pScanner}%`;
 
         setTimeout(() => {
             barAi.style.width = `${pAi}%`;
@@ -353,6 +359,7 @@ document.addEventListener("DOMContentLoaded", () => {
             barCamera.style.width = `${pCamera}%`;
             if (barWebcam) barWebcam.style.width = `${pWebcam}%`;
             if (barScreenshot) barScreenshot.style.width = `${pScreenshot}%`;
+            if (barScanner) barScanner.style.width = `${pScanner}%`;
         }, 50);
 
         // 3. Reset & Render Visual Mode
@@ -570,7 +577,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 smartphone:       [59,  130, 246],
                 dedicated_camera: [16,  185, 129],
                 webcam:           [168, 85,  247],
-                screenshot:       cl.is_canva_detected ? [124, 58, 237] : [245, 158, 11]
+                screenshot:       cl.is_canva_detected ? [124, 58, 237] : [245, 158, 11],
+                scanner:          [2,   132, 199]
             };
             const [r, g, b] = verdictColors[cl.verdict] || [100, 116, 139];
             doc.setFillColor(r, g, b);
@@ -596,7 +604,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 { label: "Kamera HP",            key: "smartphone",       color: [59, 130, 246] },
                 { label: "Kamera DSLR/Mirrorless", key: "dedicated_camera", color: [16, 185, 129] },
                 { label: "Webcam / Laptop",      key: "webcam",           color: [168, 85, 247] },
-                { label: "Screenshot / Desain Grafis", key: "screenshot",   color: [245, 158, 11] }
+                { label: cl.is_canva_detected ? "Desain Canva" : "Screenshot / Layar", key: "screenshot", color: [245, 158, 11] },
+                { label: "Dokumen Pindai / Scan", key: "scanner",          color: [2, 132, 199] }
             ];
             const barW = (W - margin * 2 - 8) / 2;
             probEntries.forEach((p, i) => {

@@ -151,6 +151,13 @@ async def list_samples():
             "description": "Desain poster template Canva dengan tipografi tajam, warna grafis sintetis & kanvas 1:1",
             "filename": "sample_canva.jpg",
             "icon": "🎨"
+        },
+        {
+            "id": "scanner",
+            "name": "Sampel Scan Printer / Dokumen A4 (Epson)",
+            "description": "Dokumen surat resmi hasil scan flatbed Epson L3210 pada 150 DPI format A4",
+            "filename": "sample_scanner.jpg",
+            "icon": "📄"
         }
     ]
     return samples
@@ -164,7 +171,8 @@ async def analyze_sample(sample_id: str):
         "dslr": "sample_dslr.jpg",
         "webcam": "sample_webcam.jpg",
         "screenshot": "sample_screenshot.png",
-        "canva": "sample_canva.jpg"
+        "canva": "sample_canva.jpg",
+        "scanner": "sample_scanner.jpg"
     }
     if sample_id not in file_map:
         raise HTTPException(status_code=404, detail="Sampel tidak ditemukan.")

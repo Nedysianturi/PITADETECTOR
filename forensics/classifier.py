@@ -20,12 +20,13 @@ def classify_image(
     aspect_ratio = round(max(w, h) / (min(w, h) + 1e-6), 2)
     megapixels = round((w * h) / 1000000.0, 2)
     
-    # Inisialisasi bobot dasar untuk 5 kategori
+    # Inisialisasi bobot dasar untuk 6 kategori
     score_ai = 4.0
     score_phone = 4.0
     score_camera = 4.0
     score_webcam = 4.0
     score_screenshot = 4.0
+    score_scanner = 4.0
     reasons = []
 
     # Ambil metrik grafis digital dari noise_res
@@ -51,7 +52,20 @@ def classify_image(
     canva_preset = metadata_res.get("canva_preset_name")
     is_canva_detected = False
 
-    if device_cat == "canva" or is_canva_sig:
+    is_scanner_dev = metadata_res.get("is_scanner_device", False)
+    scan_preset = metadata_res.get("scan_preset_name")
+    dpi_val = metadata_res.get("dpi")
+
+    if device_cat == "scanner" or is_scanner_dev:
+        score_scanner += 140.0
+        make_str = metadata_res.get("make") or ""
+        model_str = metadata_res.get("model") or ""
+        soft_str = metadata_res.get("software") or ""
+        scanner_info = f"{make_str} {model_str} {soft_str}".strip() or "Flatbed Scanner / MFP"
+        reasons.append(f"**Perangkat Pemindai / Scanner Terdeteksi**: EXIF/Metadata mencatat pemindai fisik {scanner_info}.")
+        if scan_preset:
+            reasons.append(f"**Format Kertas Standar Pindai**: Dimensi {w}x{h} px ({dpi_val or '-'} DPI) cocok dengan {scan_preset}.")
+    elif device_cat == "canva" or is_canva_sig:
         score_screenshot += 110.0
         is_canva_detected = True
         reasons.append("**Platform Desain Canva Terverifikasi**: Metadata berkas memuat tanda tangan digital resmi / header ekspor platform Canva (canva.com).")
@@ -150,10 +164,10 @@ def classify_image(
     high_energy = freq_res.get("high_energy_ratio", 0.0)
     hf_kurt = freq_res.get("hf_kurtosis", 0.0)
     
-    if spectral_anomaly >= 0.4 and not noise_res.get("is_likely_screenshot", False):
+    if spectral_anomaly >= 0.4 and not noise_res.get("is_likely_screenshot", False) and not is_scanner_dev and device_cat != "scanner":
         score_ai += 25.0 * spectral_anomaly
         reasons.append(f"**Anomali Spektral Difusi**: Terdeteksi lonjakan frekuensi diskrit (kurtosis {hf_kurt:.1f}) yang konsisten dengan artefak dekonvolusi AI.")
-    elif high_energy > 0.18 and not is_graphic and not is_canva_detected:
+    elif high_energy > 0.18 and not is_graphic and not is_canva_detected and not is_scanner_dev and device_cat != "scanner":
         # Sensor fisik kaya frekuensi tinggi alami
         if noise_res.get("halo_ratio", 0) > 35.0:
             score_phone += 15.0
@@ -163,7 +177,7 @@ def classify_image(
             score_camera += 15.0
 
     # -------------------------------------------------------------
-    # 4. ANALISIS NOISE SENSOR & DETEKSI ELEMEN GRAFIS / POSTER / CANVA
+    # 4. ANALISIS NOISE SENSOR & DETEKSI ELEMEN GRAFIS / POSTER / CANVA / SCANNER
     # -------------------------------------------------------------
     avg_noise = noise_res.get("avg_noise_std", 0.0)
     halo_ratio = noise_res.get("halo_ratio", 0.0)
@@ -173,11 +187,14 @@ def classify_image(
     pure_color_ratio = noise_res.get("pure_color_ratio", 0.0)
     is_webcam_optics = noise_res.get("is_likely_webcam_optics", False)
 
-    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Flyer / Banner Promosi / Canva
+    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Flyer / Dokumen Scan / Canva
     if is_graphic:
-        if len(ai_sigs) > 0 or spectral_anomaly >= 0.40:
+        if len(ai_sigs) > 0 or (spectral_anomaly >= 0.40 and not has_camera_hardware_exif and not is_scanner_dev and device_cat != "scanner"):
             score_ai += 75.0
             reasons.append("**Generasi AI Terverifikasi**: Ditemukan jejak/anomali generator AI pada berkas desain.")
+        elif device_cat == "scanner" or is_scanner_dev:
+            score_scanner += 95.0
+            reasons.append(f"**Tipografi Dokumen Cetak Pindai**: Terdeteksi teks dokumen fisik tercetak (Laplacian p99 {lap_p99:.1f}) yang dipindai rata oleh sensor bar flatbed.")
         elif not has_camera_hardware_exif:
             if is_canva_detected or is_canva_fn or is_canva_sig or (canva_preset and device_cat != "screenshot" and not is_screen_res):
                 score_screenshot += 95.0
@@ -247,18 +264,21 @@ def classify_image(
             score_webcam += 4.0
 
     # -------------------------------------------------------------
-    # NORMALISASI PROBABILITAS (5 Kategori)
+    # NORMALISASI PROBABILITAS (6 Kategori)
     # -------------------------------------------------------------
-    total = score_ai + score_phone + score_camera + score_webcam + score_screenshot
+    total = score_ai + score_phone + score_camera + score_webcam + score_screenshot + score_scanner
     prob_ai = round((score_ai / total) * 100, 1)
     prob_phone = round((score_phone / total) * 100, 1)
     prob_camera = round((score_camera / total) * 100, 1)
     prob_webcam = round((score_webcam / total) * 100, 1)
     prob_screenshot = round((score_screenshot / total) * 100, 1)
+    prob_scanner = round((score_scanner / total) * 100, 1)
     
     # Penyesuaian akhir agar total tepat 100%
-    diff = round(100.0 - (prob_ai + prob_phone + prob_camera + prob_webcam + prob_screenshot), 1)
-    if (is_graphic or is_screenshot) and not has_camera_hardware_exif:
+    diff = round(100.0 - (prob_ai + prob_phone + prob_camera + prob_webcam + prob_screenshot + prob_scanner), 1)
+    if device_cat == "scanner" or (is_scanner_dev and not has_camera_hardware_exif):
+        prob_scanner += diff
+    elif (is_graphic or is_screenshot) and not has_camera_hardware_exif:
         prob_screenshot += diff
     elif has_camera_hardware_exif:
         if device_cat == "dedicated_camera":
@@ -279,6 +299,7 @@ def classify_image(
     prob_camera = round(max(0.0, min(100.0, prob_camera)), 1)
     prob_webcam = round(max(0.0, min(100.0, prob_webcam)), 1)
     prob_screenshot = round(max(0.0, min(100.0, prob_screenshot)), 1)
+    prob_scanner = round(max(0.0, min(100.0, prob_scanner)), 1)
 
     # Tentukan pemenang
     screenshot_label = "Desain Grafis Canva (canva.com)" if is_canva_detected else "Tangkapan Layar / Desain Grafis"
@@ -289,7 +310,8 @@ def classify_image(
         ("smartphone", prob_phone, "Kamera Smartphone (HP)", "📱"),
         ("dedicated_camera", prob_camera, "Kamera Dedicated (DSLR/Mirrorless)", "📷"),
         ("webcam", prob_webcam, "Kamera Laptop / Webcam", "💻"),
-        ("screenshot", prob_screenshot, screenshot_label, screenshot_icon)
+        ("screenshot", prob_screenshot, screenshot_label, screenshot_icon),
+        ("scanner", prob_scanner, "Dokumen Pindai / Scan Printer", "📄")
     ]
     scores.sort(key=lambda x: x[1], reverse=True)
     top_cat, top_prob, top_label, top_icon = scores[0]
@@ -302,6 +324,8 @@ def classify_image(
         "verdict_icon": top_icon,
         "is_canva_detected": is_canva_detected,
         "canva_preset": canva_preset,
+        "is_scanner_detected": bool(device_cat == "scanner" or is_scanner_dev),
+        "scan_preset": scan_preset,
         "top_probability": top_prob,
         "confidence": confidence,
         "probabilities": {
@@ -309,7 +333,8 @@ def classify_image(
             "smartphone": prob_phone,
             "dedicated_camera": prob_camera,
             "webcam": prob_webcam,
-            "screenshot": prob_screenshot
+            "screenshot": prob_screenshot,
+            "scanner": prob_scanner
         },
         "reasons": reasons
     }

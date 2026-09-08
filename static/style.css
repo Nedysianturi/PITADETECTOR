@@ -561,6 +561,10 @@ body {
     background: linear-gradient(90deg, #f59e0b, #ea580c);
 }
 
+.fill-scanner {
+    background: linear-gradient(90deg, #0284c7, #06b6d4);
+}
+
 /* Dashboard Grid */
 .dashboard-grid {
     display: grid;

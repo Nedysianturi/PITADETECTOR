@@ -48,6 +48,52 @@ CANVA_SIGNATURES = [
     "created with canva", "canva_design", "canva editorial", "canvapro"
 ]
 
+# Perangkat keras scanner, printer multifungsi, dan mesin fotokopi
+SCANNER_PRINTER_BRANDS = [
+    "epson", "canoscan", "pixma", "scansnap", "fujitsu", "brother",
+    "scanjet", "deskjet", "laserjet", "officejet", "xerox", "kyocera",
+    "ricoh", "konica minolta", "plustek", "avision", "mustek",
+    "pantum", "lexmark", "sharp", "toshiba", "docucentre",
+    "scanner", "flatbed scanner", "document scanner", "mfp", "aio"
+]
+
+# Software pengambil dokumen scan & driver TWAIN/WIA
+SCANNER_SOFTWARE = [
+    "epson scan", "epson scan 2", "epson smart panel", "hp smart",
+    "hp scan", "hp scanning", "hp scan and capture", "canon quick menu",
+    "canon ij scan utility", "canon scangear", "brother iprint&scan",
+    "brother controlcenter", "scansnap home", "scansnap manager",
+    "vuescan", "silverfast", "naps2", "not another pdf scanner",
+    "windows fax and scan", "windows scan", "paperless", "paperscan",
+    "adobe acrobat scan", "simple scan", "xsane", "wia-", "twain"
+]
+
+# Dimensi baku kertas hasil scan (A4 / Letter / F4 pada 150, 200, 300, 600 DPI)
+SCANNER_STANDARD_RESOLUTIONS = {
+    # A4 (210 x 297 mm)
+    (2480, 3508): "Dokumen A4 Pindai (300 DPI)",
+    (3508, 2480): "Dokumen A4 Landscape (300 DPI)",
+    (2479, 3508): "Dokumen A4 Pindai (300 DPI)",
+    (3508, 2479): "Dokumen A4 Landscape (300 DPI)",
+    (2480, 3507): "Dokumen A4 Pindai (300 DPI)",
+    (1654, 2339): "Dokumen A4 Pindai (200 DPI)",
+    (2339, 1654): "Dokumen A4 Landscape (200 DPI)",
+    (1240, 1754): "Dokumen A4 Pindai (150 DPI)",
+    (1754, 1240): "Dokumen A4 Landscape (150 DPI)",
+    (4960, 7016): "Dokumen A4 Pindai HD (600 DPI)",
+    (7016, 4960): "Dokumen A4 Landscape HD (600 DPI)",
+    # US Letter (8.5 x 11 in)
+    (2550, 3300): "Dokumen Letter Pindai (300 DPI)",
+    (3300, 2550): "Dokumen Letter Landscape (300 DPI)",
+    (1700, 2200): "Dokumen Letter Pindai (200 DPI)",
+    (1275, 1650): "Dokumen Letter Pindai (150 DPI)",
+    # F4 / Folio (215 x 330 mm)
+    (2539, 3898): "Dokumen F4 / Folio Pindai (300 DPI)",
+    (3898, 2539): "Dokumen F4 / Folio Landscape (300 DPI)"
+}
+
+# Template kanvas populer dan resolusi standar Canva
+
 # Template kanvas populer dan resolusi standar Canva
 CANVA_CANVAS_PRESETS = {
     (1080, 1080): "Postingan Instagram Persegi (1:1)",
@@ -228,12 +274,51 @@ def analyze_metadata(image_bytes: bytes, pil_img: Image.Image, filename: str = "
     except Exception as e:
         pass
 
+    # 3.1 Ekstraksi DPI Resolusi Cetak/Pindai
+    dpi_val = None
+    if hasattr(pil_img, "info") and pil_img.info and "dpi" in pil_img.info:
+        dpi_info = pil_img.info["dpi"]
+        if isinstance(dpi_info, (tuple, list)) and len(dpi_info) >= 2:
+            try:
+                dpi_val = int(round(float(dpi_info[0])))
+            except Exception:
+                pass
+    
+    if not dpi_val and "XResolution" in exif_data:
+        try:
+            x_res_str = str(exif_data["XResolution"])
+            if "/" in x_res_str:
+                num, den = x_res_str.split("/")
+                dpi_val = int(round(float(num) / float(den)))
+            else:
+                dpi_val = int(round(float(x_res_str)))
+        except Exception:
+            pass
+
     # 4. Evaluasi Tipe Perangkat dari Metadata
     device_category = "unknown"
     make_lower = make.lower()
     model_lower = model.lower()
     software_lower = software.lower()
     full_cam_str = f"{make_lower} {model_lower} {software_lower}".strip()
+    img_wh = (pil_img.width, pil_img.height)
+
+    # --- Deteksi Scanner & Printer Multifungsi ---
+    is_scanner_brand = any(sb in full_cam_str for sb in SCANNER_PRINTER_BRANDS)
+    is_scanner_software = any(ss in software_lower for ss in SCANNER_SOFTWARE)
+    is_scanner_filename = any(k in filename.lower() for k in ["scan", "scanned", "skan", "img_scan", "scan_", "dokumen_"])
+    
+    # Deteksi resolusi dokumen kertas baku scanner
+    scan_preset = SCANNER_STANDARD_RESOLUTIONS.get(img_wh)
+    if not scan_preset:
+        scan_preset = SCANNER_STANDARD_RESOLUTIONS.get((pil_img.height, pil_img.width))
+
+    is_scanner = (
+        is_scanner_brand or 
+        is_scanner_software or 
+        (scan_preset and dpi_val in [150, 200, 300, 400, 600] and not lens_model and not focal_length) or
+        (is_scanner_filename and (scan_preset or dpi_val in [150, 200, 300, 600]) and not has_exif)
+    )
 
     # --- Deteksi Screenshot via Software Metadata ---
     is_screenshot_software = any(s in software_lower for s in SCREENSHOT_SOFTWARE)
@@ -243,7 +328,6 @@ def analyze_metadata(image_bytes: bytes, pil_img: Image.Image, filename: str = "
         "snip", "scr_", "screenshot_"
     ])
     # Deteksi via resolusi layar tepat
-    img_wh = (pil_img.width, pil_img.height)
     is_screen_resolution = img_wh in COMMON_SCREEN_RESOLUTIONS
 
     is_webcam = any(b in full_cam_str for b in WEBCAM_LAPTOP_BRANDS)
@@ -260,7 +344,10 @@ def analyze_metadata(image_bytes: bytes, pil_img: Image.Image, filename: str = "
         
     is_canva_likely = bool(is_canva_signature or is_canva_software or is_canva_filename or (canva_preset and not has_exif))
 
-    if is_canva_software or is_canva_signature:
+    if is_scanner:
+        device_category = "scanner"
+        findings.append(f"Terdeteksi perangkat scanner dokumen / scan printer: {make} {model} {software}".strip())
+    elif is_canva_software or is_canva_signature:
         is_canva_signature = True
         device_category = "canva"
         findings.append("Terverifikasi platform desain grafis Canva (canva.com).")
@@ -290,9 +377,13 @@ def analyze_metadata(image_bytes: bytes, pil_img: Image.Image, filename: str = "
             if lens_model:
                 findings.append(f"Lensa terpasang: {lens_model}")
 
+    if scan_preset:
+        findings.append(f"Dimensi {pil_img.width}x{pil_img.height} px cocok dengan format scan baku: {scan_preset}.")
+    if dpi_val:
+        findings.append(f"Metadata resolusi cetak/pindai: {dpi_val} DPI.")
     if is_canva_filename:
         findings.append(f"Nama berkas '{filename}' mengindikasikan unduhan desain dari Canva.")
-    if canva_preset and not has_exif:
+    if canva_preset and not has_exif and not is_scanner:
         findings.append(f"Dimensi {pil_img.width}x{pil_img.height} px cocok dengan template kanvas standar Canva: {canva_preset}.")
 
     # Crop factor & optical heuristics
@@ -337,6 +428,9 @@ def analyze_metadata(image_bytes: bytes, pil_img: Image.Image, filename: str = "
         "is_canva_filename": is_canva_filename,
         "canva_preset_name": canva_preset,
         "is_canva_likely": is_canva_likely,
+        "dpi": dpi_val,
+        "is_scanner_device": is_scanner,
+        "scan_preset_name": scan_preset,
         "ai_signatures_found": list(set(ai_raw_matches)),
         "findings": findings,
         "raw_summary": {k: v for k, v in list(exif_data.items())[:15]}

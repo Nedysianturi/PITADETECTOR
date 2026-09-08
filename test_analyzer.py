@@ -14,7 +14,8 @@ def run_tests():
         ("samples/sample_dslr.jpg", "dedicated_camera", "Kamera Dedicated"),
         ("samples/sample_webcam.jpg", "webcam", "Kamera Laptop / Webcam"),
         ("samples/sample_screenshot.png", "screenshot", "Screenshot / Layar"),
-        ("samples/sample_canva.jpg", "screenshot", "Desain Grafis Canva")
+        ("samples/sample_canva.jpg", "screenshot", "Desain Grafis Canva"),
+        ("samples/sample_scanner.jpg", "scanner", "Hasil Scan Printer")
     ]
     
     all_passed = True

@@ -216,7 +216,66 @@ def create_samples():
     canva_exif_bytes = piexif.dump(canva_exif)
     cv_img.save("samples/sample_canva.jpg", "jpeg", quality=92, exif=canva_exif_bytes)
 
-    print("Semua sampel berhasil dibuat di folder samples/!")
+    # 7. Sampel Hasil Scan Printer / Scanner Dokumen (A4 150 DPI: 1240 x 1754 px)
+    print("Membuat sampel Hasil Scan Printer / Scanner...")
+    sc_w, sc_h = 1240, 1754
+    # Warna dasar kertas putih dokumen (#fbfcf8 dengan noise mikro serat kertas)
+    scan_arr = np.random.normal(252, 2.0, (sc_h, sc_w, 3)).clip(240, 255).astype(np.uint8)
+    
+    # Margin tepi kertas flatbed scanner (garis batas bayangan tepi kaca tipis)
+    scan_arr[0:8, :] = [220, 220, 220]
+    scan_arr[:, 0:8] = [220, 220, 220]
+    scan_arr[sc_h-8:sc_h, :] = [215, 215, 215]
+    scan_arr[:, sc_w-8:sc_w] = [215, 215, 215]
+    
+    # Kop Surat / Logo Instansi Dokumen (#1e3a8a)
+    scan_arr[100:180, 120:200] = [30, 58, 138]
+    # Garis kop surat ganda
+    scan_arr[210:214, 120:1120] = [15, 23, 42]
+    scan_arr[217:219, 120:1120] = [100, 116, 139]
+    
+    # Judul Dokumen Surat Resmi (#0f172a)
+    scan_arr[260:285, 380:860] = [15, 23, 42]
+    scan_arr[300:315, 440:800] = [71, 85, 105]
+    
+    # Baris-baris paragraf teks dokumen cetak hitam (#1e293b)
+    for row_y in range(380, 1200, 36):
+        # Variasi panjang baris paragraf dokumen
+        line_width = 980 if (row_y % 180 != 0) else 650
+        scan_arr[row_y:row_y+14, 120:120+line_width] = [30, 41, 59]
+        
+    # Cap Stempel Basah Biru Instansi (#2563eb dengan alpha semi transparan)
+    center_y, center_x = 1380, 840
+    y_idx, x_idx = np.ogrid[:sc_h, :sc_w]
+    dist_from_center = np.sqrt((x_idx - center_x)**2 + (y_idx - center_y)**2)
+    stamp_mask = (dist_from_center >= 70) & (dist_from_center <= 85)
+    scan_arr[stamp_mask] = [37, 99, 235]
+    
+    # Tanda Tangan Tinta Hitam / Gel Pen (#09090b)
+    scan_arr[1410:1470, 780:960] = np.where(
+        np.random.rand(60, 180, 1) > 0.65,
+        np.array([15, 23, 42], dtype=np.uint8),
+        scan_arr[1410:1470, 780:960]
+    )
+
+    scanner_img = Image.fromarray(scan_arr)
+    
+    # Metadata EXIF Resmi Hardware Scanner Printer Epson
+    scanner_exif = {
+        "0th": {
+            piexif.ImageIFD.Make: "Epson",
+            piexif.ImageIFD.Model: "Epson L3210 / Perfection Series Flatbed Scanner",
+            piexif.ImageIFD.Software: "Epson Scan 2 v6.5.23.0",
+            piexif.ImageIFD.XResolution: (150, 1),
+            piexif.ImageIFD.YResolution: (150, 1),
+            piexif.ImageIFD.ResolutionUnit: 2,
+            piexif.ImageIFD.DateTime: "2026:09:08 14:15:00"
+        }
+    }
+    scanner_exif_bytes = piexif.dump(scanner_exif)
+    scanner_img.save("samples/sample_scanner.jpg", "jpeg", quality=90, exif=scanner_exif_bytes)
+
+    print("Semua 7 sampel berhasil dibuat di folder samples/!")
 
 if __name__ == "__main__":
     create_samples()
