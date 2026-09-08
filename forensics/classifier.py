@@ -29,8 +29,11 @@ def classify_image(
     score_scanner = 4.0
     reasons = []
 
-    # Ambil metrik grafis digital dari noise_res
+    # Ambil metrik grafis digital & kertas scan dari noise_res
     is_graphic = noise_res.get("is_graphic_elements", False)
+    is_scanned_doc = noise_res.get("is_scanned_document_pattern", False)
+    paper_white_ratio = noise_res.get("paper_white_ratio", 0.0)
+    paper_noise_std = noise_res.get("paper_noise_std", 0.0)
     sat_ratio = noise_res.get("sat_ratio", 0.0)
     lap_p99 = noise_res.get("lap_p99", 0.0)
     zero_diff_ratio = noise_res.get("zero_diff_ratio", 0.0)
@@ -187,8 +190,13 @@ def classify_image(
     pure_color_ratio = noise_res.get("pure_color_ratio", 0.0)
     is_webcam_optics = noise_res.get("is_likely_webcam_optics", False)
 
-    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Flyer / Dokumen Scan / Canva
-    if is_graphic:
+    # A. Penanganan Khusus Gambar Grafis / Desain Poster / Dokumen Scan / Canva
+    if is_scanned_doc and not has_camera_hardware_exif:
+        score_scanner += 120.0
+        is_scanner_dev = True
+        reasons.append(f"**Karakteristik Dokumen / Buku Hasil Scan Terdeteksi**: Memuat latar belakang kertas fisik ({paper_white_ratio*100:.1f}%), tipografi teks cetak beresolusi tinggi (Laplacian p99 {lap_p99:.1f}), dan fluktuasi tekstur serat kertas/sensor flatbed ({paper_noise_std:.1f} STD).")
+        reasons.append(f"**Bukan Tangkapan Layar Digital**: Citra memiliki noise foton partikel cetak dan fluktuasi piksel non-flat (zero diff {zero_diff_ratio*100:.1f}%), berbeda dengan rendering antarmuka layar komputer/HP.")
+    elif is_graphic:
         if len(ai_sigs) > 0 or (spectral_anomaly >= 0.40 and not has_camera_hardware_exif and not is_scanner_dev and device_cat != "scanner"):
             score_ai += 75.0
             reasons.append("**Generasi AI Terverifikasi**: Ditemukan jejak/anomali generator AI pada berkas desain.")

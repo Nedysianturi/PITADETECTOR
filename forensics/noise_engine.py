@@ -74,14 +74,31 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     black_ratio = float(black_mask.mean())
     pure_color_ratio = float(white_ratio + black_ratio)
 
-    # (d) Deteksi Saturasi Sintetis Vektor Grafis / Poster
+    # (d) Deteksi Area Kertas Fisik & Tekstur Scan Dokumen (Off-white / Paper background)
+    gray_arr = np.mean(arr_uint8, axis=2)
+    paper_mask = gray_arr > 205
+    paper_white_ratio = float(paper_mask.mean())
+    paper_noise_std = float(np.std(gray_arr[paper_mask])) if np.sum(paper_mask) > 100 else 0.0
+
+    # Pola khas dokumen / buku cetak hasil scan:
+    # 1. Dominasi area kertas putih/krem (paper_white_ratio >= 0.40)
+    # 2. Teks/grafis dokumen tajam (p99 >= 65.0)
+    # 3. Fluktuasi noise kertas / sensor optik non-flat (zero_diff_ratio < 0.65 dan paper_noise_std >= 2.0)
+    is_scanned_document_pattern = bool(
+        paper_white_ratio >= 0.40 and
+        p99 >= 65.0 and
+        zero_diff_ratio < 0.65 and
+        paper_noise_std >= 2.0
+    )
+
+    # (e) Deteksi Saturasi Sintetis Vektor Grafis / Poster
     hsv_arr = np.array(img.convert("HSV"))
     sat_ratio = float((hsv_arr[:, :, 1] > 180).mean())
 
     # Elemen grafis/tipografi digital memiliki kontras tepi ekstrim (font/vektor)
     is_graphic_elements = bool((p99 > 75.0 and sat_ratio > 0.08) or (p99 > 115.0))
 
-    # (e) Perhitungan skor screenshot terpadu
+    # (f) Perhitungan skor screenshot terpadu
     is_likely_screenshot = False
     screenshot_score = 0.0
 
@@ -105,6 +122,10 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
         is_likely_screenshot = True
     elif screenshot_score >= 6.5 and zero_diff_ratio > 0.40:
         is_likely_screenshot = True
+
+    # Jika terbukti dokumen fisik scan dengan noise kertas, jangan klasifikasikan sebagai screenshot murni
+    if is_scanned_document_pattern and zero_diff_ratio < 0.55:
+        is_likely_screenshot = False
 
     # ── 4. Klasifikasi optik ──────────────────────────────────────────────────
     findings = []
@@ -173,6 +194,9 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
         "flat_region_score":        round(flat_region_score, 4),
         "screenshot_score":         round(screenshot_score, 2),
         "noise_channel_variance":   round(noise_channel_variance, 4),
+        "paper_white_ratio":        round(paper_white_ratio, 4),
+        "paper_noise_std":          round(paper_noise_std, 2),
+        "is_scanned_document_pattern": is_scanned_document_pattern,
         "is_likely_screenshot":     is_likely_screenshot,
         "is_graphic_elements":      is_graphic_elements,
         "is_likely_smartphone_optics": is_likely_smartphone_optics,
