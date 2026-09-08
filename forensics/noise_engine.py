@@ -10,7 +10,7 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     dan jejak komputasi penajaman (unsharp masking/sharpening halo).
     Membedakan kamera HP (computational HDR + denoising agresif + halo tajam),
     kamera DSLR (noise optik Poisson-Gaussian alami), AI (ketiadaan noise fisik),
-    Webcam (noise indoor moderat), dan Screenshot (noise nol + piksel murni digital).
+    Webcam (noise indoor moderat), dan Screenshot/Desain Grafis (noise nol + piksel murni digital).
     """
     # Resize untuk analisis noise standar
     img = pil_img.convert("RGB")
@@ -53,10 +53,8 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     p50 = float(np.median(np.abs(laplacian)) + 1e-6)
     halo_ratio = float(p99 / p50)
 
-    # ── 3. DETEKSI SCREENSHOT — Analisis Ciri Khas Grafis Digital ───────────
+    # ── 3. DETEKSI SCREENSHOT & ELEMEN GRAFIS DIGITAL ───────────────────────
     # (a) Rasio piksel tetangga yang identik mutlak (zero differential gradient)
-    # Foto optik selalu memiliki fluktuasi noise Poisson-Gaussian fisik antar piksel.
-    # Sebaliknya, screenshot UI memiliki area besar dengan piksel bernilai identik (zero diff).
     h_diff = np.abs(np.diff(arr, axis=1))
     v_diff = np.abs(np.diff(arr, axis=0))
     zero_diff_ratio = float(((h_diff == 0).mean() + (v_diff == 0).mean()) / 2.0)
@@ -76,7 +74,14 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     black_ratio = float(black_mask.mean())
     pure_color_ratio = float(white_ratio + black_ratio)
 
-    # (d) Perhitungan skor screenshot terpadu
+    # (d) Deteksi Saturasi Sintetis Vektor Grafis / Poster
+    hsv_arr = np.array(img.convert("HSV"))
+    sat_ratio = float((hsv_arr[:, :, 1] > 180).mean())
+
+    # Elemen grafis/tipografi digital memiliki kontras tepi ekstrim (font/vektor)
+    is_graphic_elements = bool((p99 > 75.0 and sat_ratio > 0.08) or (p99 > 115.0))
+
+    # (e) Perhitungan skor screenshot terpadu
     is_likely_screenshot = False
     screenshot_score = 0.0
 
@@ -96,9 +101,6 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
     if noise_channel_variance < 0.2:
         screenshot_score += 1.0
 
-    # Screenshot dikonfirmasi jika:
-    # 1. Rasio piksel identik tinggi dan terdapat elemen warna UI murni, ATAU
-    # 2. Skor screenshot gabungan sangat tinggi dengan zero differential dominan
     if (zero_diff_ratio > 0.50 and pure_color_ratio > 0.10) or (zero_diff_ratio > 0.80):
         is_likely_screenshot = True
     elif screenshot_score >= 6.5 and zero_diff_ratio > 0.40:
@@ -117,7 +119,12 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
             f"({zero_diff_ratio*100:.1f}%), ketiadaan noise sensor foton alami, "
             f"dan dominasi warna UI murni ({pure_color_ratio*100:.1f}%)."
         )
-    elif halo_ratio > 38.0 and avg_noise_std < 7.0:
+    elif is_graphic_elements:
+        findings.append(
+            f"Terdeteksi elemen grafis digital/tipografi berkontras sangat tinggi (Laplacian p99: {p99:.1f}) "
+            f"dan saturasi warna sintetis ({sat_ratio*100:.1f}%), mengindikasikan poster/desain grafis atau komposit AI."
+        )
+    elif halo_ratio > 38.0 and avg_noise_std < 7.0 and not is_graphic_elements:
         is_likely_smartphone_optics = True
         findings.append(
             f"Terdeteksi sharpening halo tinggi (Rasio: {halo_ratio:.1f}), "
@@ -159,12 +166,15 @@ def analyze_noise_and_optics(pil_img: Image.Image) -> Dict[str, Any]:
         },
         "edge_energy":              round(edge_energy, 2),
         "halo_ratio":               round(halo_ratio, 2),
+        "lap_p99":                  round(p99, 1),
+        "sat_ratio":                round(sat_ratio, 4),
         "zero_diff_ratio":          round(zero_diff_ratio, 4),
         "pure_color_ratio":         round(pure_color_ratio, 4),
         "flat_region_score":        round(flat_region_score, 4),
         "screenshot_score":         round(screenshot_score, 2),
         "noise_channel_variance":   round(noise_channel_variance, 4),
         "is_likely_screenshot":     is_likely_screenshot,
+        "is_graphic_elements":      is_graphic_elements,
         "is_likely_smartphone_optics": is_likely_smartphone_optics,
         "is_likely_dslr_optics":    is_likely_dslr_optics,
         "is_likely_webcam_optics":  is_likely_webcam_optics,
